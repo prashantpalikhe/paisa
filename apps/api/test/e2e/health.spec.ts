@@ -1,49 +1,104 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { Test, TestingModule } from '@nestjs/testing';
+/**
+ * # Health Endpoint E2E Tests
+ *
+ * Tests the GET /health endpoint against a real NestJS app
+ * connected to a real PostgreSQL database.
+ *
+ * ## Pattern established here
+ *
+ * Every e2e test file follows this structure:
+ *
+ * 1. `beforeAll` — boot the app, get the Prisma client
+ * 2. `beforeEach` — reset the database (clean slate per test)
+ * 3. Tests — use supertest for HTTP, factories for test data
+ * 4. `afterAll` — shut down the app (closes DB connection)
+ *
+ * Even though the health endpoint doesn't need test data,
+ * we include `resetDatabase` to establish the pattern for
+ * future test files that copy this structure.
+ */
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import { INestApplication } from '@nestjs/common';
+import { PrismaClient } from '@paisa/db';
 import request from 'supertest';
-import { AppModule } from '../../src/app.module';
-import { GlobalExceptionFilter } from '../../src/common/filters/global-exception.filter';
-import { ResponseTransformInterceptor } from '../../src/common/interceptors/response-transform.interceptor';
+import { createTestApp, getPrisma, resetDatabase } from '../helpers';
 
 describe('Health (e2e)', () => {
   let app: INestApplication;
+  let prisma: PrismaClient;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    app = await createTestApp();
+    prisma = getPrisma(app);
+  });
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalFilters(new GlobalExceptionFilter());
-    app.useGlobalInterceptors(new ResponseTransformInterceptor());
-    await app.init();
+  beforeEach(async () => {
+    // Clean slate for every test — even if this suite doesn't write data,
+    // we include this to establish the pattern for all e2e test files.
+    await resetDatabase(prisma);
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  it('GET /health should return health status', async () => {
+  // ── Happy path ──
+
+  it('GET /health → 200 with full health status', async () => {
     const response = await request(app.getHttpServer())
       .get('/health')
       .expect(200);
 
-    expect(response.body).toHaveProperty('status');
-    expect(response.body).toHaveProperty('timestamp');
-    expect(response.body).toHaveProperty('uptime');
-    expect(response.body).toHaveProperty('checks');
-    expect(response.body).toHaveProperty('features');
-    expect(response.body.checks).toHaveProperty('database');
+    // Health endpoint returns raw response (not wrapped in { data })
+    // because the ResponseTransformInterceptor skips /health
+    expect(response.body).toMatchObject({
+      status: 'ok',
+      checks: {
+        database: true,
+      },
+      features: {
+        email: false,
+        stripe: false,
+        redis: false,
+        rabbitmq: false,
+        storage: false,
+        websockets: false,
+        sentry: false,
+      },
+    });
+
+    // Verify structural fields
+    expect(response.body.timestamp).toBeDefined();
+    expect(response.body.uptime).toBeGreaterThan(0);
   });
 
-  it('GET /nonexistent should return 404 with error shape', async () => {
+  // ── Error handling ──
+
+  it('GET /nonexistent → 404 with standard error shape', async () => {
     const response = await request(app.getHttpServer())
       .get('/nonexistent')
       .expect(404);
 
-    expect(response.body).toHaveProperty('error');
-    expect(response.body.error).toHaveProperty('code', 'NOT_FOUND');
-    expect(response.body.error).toHaveProperty('message');
+    // All errors follow { error: { code, message } } shape.
+    // This proves the GlobalExceptionFilter is wired up correctly.
+    expect(response.body).toMatchObject({
+      error: {
+        code: 'NOT_FOUND',
+        message: expect.any(String),
+      },
+    });
+  });
+
+  // ── Security headers ──
+
+  it('should include security headers from Helmet', async () => {
+    const response = await request(app.getHttpServer())
+      .get('/health')
+      .expect(200);
+
+    // Helmet sets these headers. Verifying they exist proves
+    // configureApp() is applying Helmet correctly in tests.
+    expect(response.headers['x-content-type-options']).toBe('nosniff');
+    expect(response.headers['x-frame-options']).toBe('SAMEORIGIN');
   });
 });

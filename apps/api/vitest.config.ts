@@ -3,7 +3,7 @@ import path from 'path';
 
 export default defineConfig({
   test: {
-    globals: true,
+    globals: false, // Explicit imports from 'vitest' — clearer, no ambient type issues
     root: './',
     include: ['src/**/*.spec.ts'],
     environment: 'node',

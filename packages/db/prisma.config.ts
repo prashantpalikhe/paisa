@@ -25,4 +25,10 @@ export default defineConfig({
   migrate: {
     schema: path.join(__dirname, 'prisma', 'schema.prisma'),
   },
+
+  // Prisma 7 requires the URL here for CLI commands (migrate, studio, seed).
+  // At runtime, the URL is passed via PrismaPg adapter instead.
+  datasource: {
+    url: process.env.DATABASE_URL!,
+  },
 });

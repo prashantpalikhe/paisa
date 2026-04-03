@@ -2,12 +2,10 @@ import { NestFactory } from '@nestjs/core';
 import { Logger } from 'nestjs-pino';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { apiReference } from '@scalar/nestjs-api-reference';
-import helmet from 'helmet';
-import cookieParser from 'cookie-parser';
+import { brand } from '@paisa/config';
 import { AppModule } from './app.module';
 import { AppConfigService } from './core/config/config.service';
-import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
-import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
+import { configureApp } from './configure-app';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -17,36 +15,29 @@ async function bootstrap() {
   // ─── Logger ───
   app.useLogger(app.get(Logger));
 
-  // ─── Config ───
-  const config = app.get(AppConfigService);
+  // ─── Middleware, security, filters, interceptors ───
+  // Shared with e2e tests via configure-app.ts — NEVER add middleware
+  // here directly. Add it to configureApp() so tests get it too.
+  configureApp(app);
 
-  // ─── Security ───
-  app.use(helmet());
-  app.use(cookieParser());
-
-  // ─── CORS ───
-  app.enableCors({
-    origin: config.corsOrigins,
-    credentials: true, // Required for httpOnly cookies
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
-  });
-
-  // ─── Global pipes, filters, interceptors ───
-  app.useGlobalFilters(new GlobalExceptionFilter());
-  app.useGlobalInterceptors(new ResponseTransformInterceptor());
-
-  // ─── OpenAPI + Scalar ───
+  // ─── API Documentation ───
+  //
+  // @nestjs/swagger generates the OpenAPI spec from decorators.
+  // Scalar renders it as a beautiful interactive UI (replaces Swagger UI).
+  //
+  // - /api/docs     → Scalar UI (interactive API explorer)
+  // - /api/docs.json → Raw OpenAPI JSON (for code generation, Postman, etc.)
+  //
   const openApiConfig = new DocumentBuilder()
-    .setTitle('Paisa API')
-    .setDescription('API documentation for the Paisa boilerplate')
+    .setTitle(`${brand.name} API`)
+    .setDescription(`API documentation for ${brand.name} — ${brand.description}`)
     .setVersion('0.0.1')
     .addBearerAuth()
     .build();
 
   const document = SwaggerModule.createDocument(app, openApiConfig);
 
-  // Scalar UI at /api/docs
+  // Scalar UI — modern replacement for Swagger UI
   app.use(
     '/api/docs',
     apiReference({
@@ -55,17 +46,22 @@ async function bootstrap() {
     }),
   );
 
-  // Raw OpenAPI JSON at /api/docs/json (useful for code generation)
-  SwaggerModule.setup('api/swagger', app, document);
+  // Raw OpenAPI JSON endpoint — used by:
+  // - Code generation tools (openapi-generator, orval)
+  // - API clients (Postman, Insomnia)
+  // - CI validation scripts
+  app.getHttpAdapter().get('/api/docs.json', (_req: any, res: any) => {
+    res.json(document);
+  });
 
   // ─── Start ───
+  const config = app.get(AppConfigService);
   const port = config.env.API_PORT;
   await app.listen(port);
 
   const logger = new (await import('@nestjs/common')).Logger('Bootstrap');
   logger.log(`🚀 API running on http://localhost:${port}`);
   logger.log(`📚 API docs at http://localhost:${port}/api/docs`);
-  logger.log(`📋 Swagger at http://localhost:${port}/api/swagger`);
 }
 
 bootstrap();
