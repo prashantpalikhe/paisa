@@ -145,9 +145,19 @@ AuthController.register()
     │       ├── UserService.create()           → Prisma INSERT (argon2id hash)
     │       ├── TokenService.generateTokens()  → JWT sign + random bytes
     │       └── EventBus.emit('user.registered')
+    │             │
+    │             └── EmailEventListener.onUserRegistered()  ← @OnEvent (async, best-effort)
+    │                   ├── welcomeEmail() template
+    │                   └── provider.send()
+    │                         ├── dev:  ConsoleEmailProvider  → prints to terminal
+    │                         ├── test: InMemoryEmailProvider → captures for assertions
+    │                         └── prod: ResendEmailProvider   → real delivery
     │
     └── setRefreshCookie(res, refreshToken)    → Set-Cookie header
 ```
+
+> **Note:** The email send happens asynchronously via the event bus.
+> If it fails, the registration still succeeds — emails are best-effort.
 
 ### 6. Response Transform
 
@@ -191,6 +201,51 @@ flowchart TD
     style G fill:#ff6b6b,color:#fff
 ```
 
+## Email Event Flow (Implemented)
+
+The email module listens for domain events via `@OnEvent()` decorators. Auth never imports Email — they communicate through the EventBus.
+
+```mermaid
+sequenceDiagram
+    participant Auth as ⚙️ AuthService
+    participant Bus as 📡 EventBus
+    participant Listener as 📧 EmailEventListener
+    participant Provider as 📬 EmailProvider
+    participant Template as 🎨 Templates
+
+    Note over Auth,Template: ── Example: User Registration ──
+
+    Auth->>Bus: emit('user.registered', { email, name, verificationToken })
+    Bus->>Listener: @OnEvent('user.registered')
+    Listener->>Template: welcomeEmail(name, verifyUrl)
+    Template-->>Listener: { subject, html, text }
+    Listener->>Provider: send({ to, subject, html, text })
+
+    Note over Provider: Provider depends on NODE_ENV:
+    Note over Provider: dev → Console (terminal)
+    Note over Provider: test → InMemory (capture)
+    Note over Provider: prod → Resend (real)
+
+    Note over Auth,Template: ── Example: Password Reset ──
+
+    Auth->>Bus: emit('user.password_reset_requested', { email, resetToken })
+    Bus->>Listener: @OnEvent('user.password_reset_requested')
+    Listener->>Template: passwordResetEmail(name, resetUrl)
+    Template-->>Listener: { subject, html, text }
+    Listener->>Provider: send(...)
+```
+
+### Supported Email Events
+
+| Event | Template | When |
+|-------|----------|------|
+| `user.registered` | `welcomeEmail` | New email/password registration (skipped for OAuth) |
+| `user.verification_resent` | `verifyEmail` | User requests verification resend |
+| `user.verified_email` | `emailVerifiedEmail` | Email successfully verified |
+| `user.password_reset_requested` | `passwordResetEmail` | Forgot password flow |
+| `user.password_changed` | `passwordChangedEmail` | Password reset or change (security alert) |
+| `user.oauth_linked` | `oauthLinkedEmail` | OAuth provider linked to existing account |
+
 ## Future Extensions
 
 As we add infrastructure, the diagram grows. Here's what's coming:
@@ -202,10 +257,18 @@ sequenceDiagram
     participant Redis as 🔴 Redis<br/>(Phase 8)
     participant DB as 🗄️ PostgreSQL
     participant Queue as 🐰 RabbitMQ<br/>(Phase 8)
-    participant Email as 📧 Email Worker<br/>(Phase 4)
+    participant Email as 📧 EmailModule<br/>(✅ Done)
     participant WS as 🔌 WebSocket<br/>(Phase 9)
 
-    Note over Client,WS: ── Example: User Registration ──
+    Note over Client,WS: ── Current: User Registration ──
+
+    Client->>API: POST /auth/register
+    API->>DB: Create user
+    API-->>Client: 201 { accessToken, user }
+    API->>Email: EventBus → 'user.registered'
+    Email->>Email: Send verification email (best-effort)
+
+    Note over Client,WS: ── Future: With Redis + RabbitMQ ──
 
     Client->>API: POST /auth/register
     API->>DB: Create user
@@ -213,10 +276,10 @@ sequenceDiagram
     API->>Queue: Publish "user.registered" event
     API-->>Client: 201 { accessToken, user }
 
-    Queue->>Email: Consume event
+    Queue->>Email: Consume event (durable, retryable)
     Email->>Email: Send verification email
 
-    Note over Client,WS: ── Example: Real-time Notification ──
+    Note over Client,WS: ── Future: Real-time Notification ──
 
     Queue->>WS: Consume "payment.received"
     WS->>Client: Push notification via WebSocket
@@ -224,15 +287,15 @@ sequenceDiagram
 
 ### Infrastructure Layer Map
 
-| Layer       | Technology  | Phase | Purpose                           |
-|-------------|-------------|-------|-----------------------------------|
-| Cache       | Redis       | 8     | Session cache, rate limiting      |
-| Queue       | RabbitMQ    | 8     | Async jobs, event distribution    |
-| Email       | Resend      | 4     | Transactional emails              |
-| Payments    | Stripe      | 5     | Subscriptions, webhooks           |
-| Storage     | S3/Minio    | 7     | File uploads, avatars             |
-| WebSockets  | Socket.io   | 9     | Real-time notifications           |
-| Monitoring  | Sentry      | 10    | Error tracking, performance       |
+| Layer       | Technology  | Status | Purpose                           |
+|-------------|-------------|--------|-----------------------------------|
+| Email       | Resend      | ✅ Done | Transactional emails (6 templates) |
+| Cache       | Redis       | Planned | Session cache, rate limiting      |
+| Queue       | RabbitMQ    | Planned | Async jobs, event distribution    |
+| Payments    | Stripe      | Planned | Subscriptions, webhooks           |
+| Storage     | S3/Minio    | Planned | File uploads, avatars             |
+| WebSockets  | Socket.io   | Planned | Real-time notifications           |
+| Monitoring  | Sentry      | Planned | Error tracking, performance       |
 
 ## Key Architectural Invariants
 
