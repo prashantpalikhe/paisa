@@ -1,0 +1,168 @@
+{
+  // ─────────────────────────────────────────────────────────────────
+  // VS Code Launch Configurations
+  //
+  // These configs let you start, debug, and test the app with one click.
+  // Press F5 or use the Run & Debug panel (Ctrl+Shift+D / Cmd+Shift+D).
+  //
+  // Prerequisites:
+  //   1. Docker running (for PostgreSQL)
+  //   2. `pnpm install` completed
+  //   3. `.env` file at monorepo root (copy from .env.example)
+  //
+  // Quick start:
+  //   1. Start Docker containers:  docker compose -f docker/docker-compose.yml up -d
+  //   2. Run migrations:           pnpm --filter @paisa/db db:migrate:deploy
+  //   3. Seed database:            pnpm --filter @paisa/db db:seed
+  //   4. Press F5 and select "API: Dev Server"
+  //   5. Open http://localhost:3001/api/docs for Scalar API docs
+  // ─────────────────────────────────────────────────────────────────
+  "version": "0.2.0",
+  "configurations": [
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // API (NestJS)
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    {
+      "name": "API: Dev Server",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@paisa/api", "dev"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": ["<node_internals>/**"],
+      "presentation": {
+        "group": "api",
+        "order": 1
+      }
+    },
+    {
+      "name": "API: Debug (attach)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": ["<node_internals>/**"],
+      "presentation": {
+        "group": "api",
+        "order": 2
+      }
+    },
+    {
+      "name": "API: Unit Tests",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@paisa/api", "test"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "test",
+        "order": 1
+      }
+    },
+    {
+      "name": "API: E2E Tests",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@paisa/api", "test:e2e"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "test",
+        "order": 2
+      }
+    },
+    {
+      "name": "API: Unit Tests (current file)",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter", "@paisa/api",
+        "exec", "vitest", "run", "${relativeFile}"
+      ],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "test",
+        "order": 3
+      }
+    },
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Database
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    {
+      "name": "DB: Prisma Studio",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@paisa/db", "db:studio"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "database",
+        "order": 1
+      }
+    },
+    {
+      "name": "DB: Run Migrations",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@paisa/db", "db:migrate:deploy"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "database",
+        "order": 2
+      }
+    },
+    {
+      "name": "DB: Seed",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@paisa/db", "db:seed"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "presentation": {
+        "group": "database",
+        "order": 3
+      }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Frontend (Nuxt) — added in Phase 3
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // {
+    //   "name": "Web: Dev Server",
+    //   "type": "node",
+    //   "request": "launch",
+    //   "runtimeExecutable": "pnpm",
+    //   "runtimeArgs": ["--filter", "@paisa/web", "dev"],
+    //   "cwd": "${workspaceFolder}",
+    //   "console": "integratedTerminal"
+    // }
+  ],
+
+  "compounds": [
+    {
+      "name": "Full Stack (API + DB Studio)",
+      "configurations": ["API: Dev Server", "DB: Prisma Studio"],
+      "stopAll": true,
+      "presentation": {
+        "group": "compound",
+        "order": 1
+      }
+    }
+    // Uncomment when frontend is ready:
+    // {
+    //   "name": "Full Stack (API + Web)",
+    //   "configurations": ["API: Dev Server", "Web: Dev Server"],
+    //   "stopAll": true
+    // }
+  ]
+}

@@ -29,11 +29,30 @@ import { ResponseTransformInterceptor } from './common/interceptors/response-tra
 
 export function configureApp(app: INestApplication): void {
   // ─── Security ───
-  app.use(helmet());
+  // Helmet sets HTTP security headers (XSS, clickjacking, MIME sniffing, etc.).
+  // We relax the Content Security Policy in development so Scalar API docs
+  // can load its UI from cdn.jsdelivr.net and run inline scripts.
+  const config = app.get(AppConfigService);
+
+  app.use(
+    helmet({
+      contentSecurityPolicy: config.isDevelopment
+        ? {
+            directives: {
+              defaultSrc: ["'self'"],
+              scriptSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net'],
+              styleSrc: ["'self'", "'unsafe-inline'", 'cdn.jsdelivr.net', 'fonts.googleapis.com'],
+              fontSrc: ["'self'", 'fonts.gstatic.com'],
+              imgSrc: ["'self'", 'data:'],
+              connectSrc: ["'self'"],
+            },
+          }
+        : undefined, // Use Helmet's strict defaults in production
+    }),
+  );
   app.use(cookieParser());
 
   // ─── CORS ───
-  const config = app.get(AppConfigService);
   app.enableCors({
     origin: config.corsOrigins,
     credentials: true, // Required for httpOnly cookies

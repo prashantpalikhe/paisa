@@ -7,7 +7,6 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { ZodError } from 'zod';
 import type { ApiErrorResponse, ApiFieldError } from '@paisa/shared';
 
 /**
@@ -20,8 +19,24 @@ import type { ApiErrorResponse, ApiFieldError } from '@paisa/shared';
  * | Exception Type | HTTP Status | Error Code |
  * |---|---|---|
  * | `HttpException` | From exception | From exception |
- * | `ZodError` | 400 | `VALIDATION_ERROR` |
  * | Unknown | 500 | `INTERNAL_ERROR` |
+ *
+ * ## Validation errors
+ *
+ * Zod validation errors are converted to `BadRequestException` by the
+ * `ZodValidationPipe` BEFORE reaching this filter. The pipe throws:
+ *
+ * ```typescript
+ * new BadRequestException({
+ *   code: 'VALIDATION_ERROR',
+ *   message: 'Validation failed',
+ *   details: [{ field: 'email', message: 'Invalid email address' }]
+ * })
+ * ```
+ *
+ * This filter then extracts the structured payload and returns it in
+ * the standard error envelope. This approach avoids the fragile
+ * `instanceof ZodError` check across ESM/CJS module boundaries.
  *
  * ## Response format
  *
@@ -60,58 +75,75 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     status: number;
     body: ApiErrorResponse;
   } {
-    // Zod validation errors
-    if (exception instanceof ZodError) {
-      const details: ApiFieldError[] = exception.errors.map((err) => ({
-        field: err.path.join('.'),
-        message: err.message,
-      }));
-
-      return {
-        status: HttpStatus.BAD_REQUEST,
-        body: {
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Validation failed',
-            details,
-          },
-        },
-      };
-    }
-
-    // NestJS HTTP exceptions
+    // NestJS HTTP exceptions (includes BadRequestException from ZodValidationPipe)
     if (exception instanceof HttpException) {
       const status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 
-      let message: string;
-      let details: ApiFieldError[] | undefined;
-
+      // String response: simple message
       if (typeof exceptionResponse === 'string') {
-        message = exceptionResponse;
-      } else if (typeof exceptionResponse === 'object') {
-        const resp = exceptionResponse as Record<string, unknown>;
-        message = (resp.message as string) || exception.message;
+        return {
+          status,
+          body: {
+            error: {
+              code: this.httpStatusToCode(status),
+              message: exceptionResponse,
+            },
+          },
+        };
+      }
 
-        // NestJS class-validator style errors
+      // Object response: could be our structured validation error or NestJS default
+      if (typeof exceptionResponse === 'object') {
+        const resp = exceptionResponse as Record<string, unknown>;
+
+        // Our ZodValidationPipe format: { code, message, details }
+        if (resp.code && resp.message && Array.isArray(resp.details)) {
+          return {
+            status,
+            body: {
+              error: {
+                code: resp.code as string,
+                message: resp.message as string,
+                details: resp.details as ApiFieldError[],
+              },
+            },
+          };
+        }
+
+        // NestJS class-validator style: { message: string[] }
+        let message: string;
+        let details: ApiFieldError[] | undefined;
+
         if (Array.isArray(resp.message)) {
           details = (resp.message as string[]).map((msg) => ({
             field: '',
             message: msg,
           }));
           message = 'Validation failed';
+        } else {
+          message = (resp.message as string) || exception.message;
         }
-      } else {
-        message = exception.message;
+
+        return {
+          status,
+          body: {
+            error: {
+              code: this.httpStatusToCode(status),
+              message,
+              details,
+            },
+          },
+        };
       }
 
+      // Fallback
       return {
         status,
         body: {
           error: {
             code: this.httpStatusToCode(status),
-            message,
-            details,
+            message: exception.message,
           },
         },
       };

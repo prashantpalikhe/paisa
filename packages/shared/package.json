@@ -2,9 +2,11 @@
   "name": "@paisa/shared",
   "version": "0.0.1",
   "private": true,
-  "main": "./src/index.ts",
+  "main": "./dist/index.js",
   "types": "./src/index.ts",
   "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "echo 'no linter configured yet'",
     "test": "echo 'no tests yet'"
@@ -13,6 +15,7 @@
     "zod": "^3.24.4"
   },
   "devDependencies": {
+    "tsup": "^8.5.1",
     "typescript": "^5.8.3"
   }
 }

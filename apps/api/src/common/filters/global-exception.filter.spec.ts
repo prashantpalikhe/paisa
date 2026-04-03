@@ -4,7 +4,6 @@ import {
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
-import { ZodError } from 'zod';
 import { GlobalExceptionFilter } from './global-exception.filter';
 
 describe('GlobalExceptionFilter', () => {
@@ -34,7 +33,6 @@ describe('GlobalExceptionFilter', () => {
       error: {
         code: 'NOT_FOUND',
         message: 'User not found',
-        details: undefined,
       },
     });
   });
@@ -54,27 +52,53 @@ describe('GlobalExceptionFilter', () => {
     );
   });
 
-  it('should handle ZodError', () => {
+  it('should handle structured validation errors from ZodValidationPipe', () => {
     const json = vi.fn();
     const host = createMockHost(json);
 
-    const zodError = new ZodError([
-      {
-        code: 'invalid_type',
-        expected: 'string',
-        received: 'undefined',
-        path: ['email'],
-        message: 'Required',
-      },
-    ]);
+    // This is what ZodValidationPipe throws:
+    const exception = new BadRequestException({
+      code: 'VALIDATION_ERROR',
+      message: 'Validation failed',
+      details: [
+        { field: 'email', message: 'Invalid email address' },
+        { field: 'password', message: 'Password must be at least 8 characters' },
+      ],
+    });
 
-    filter.catch(zodError, host);
+    filter.catch(exception, host);
 
     expect(json).toHaveBeenCalledWith({
       error: {
         code: 'VALIDATION_ERROR',
         message: 'Validation failed',
-        details: [{ field: 'email', message: 'Required' }],
+        details: [
+          { field: 'email', message: 'Invalid email address' },
+          { field: 'password', message: 'Password must be at least 8 characters' },
+        ],
+      },
+    });
+  });
+
+  it('should handle NestJS class-validator style errors (message array)', () => {
+    const json = vi.fn();
+    const host = createMockHost(json);
+
+    // NestJS class-validator format: { message: string[] }
+    const exception = new BadRequestException({
+      message: ['email must be valid', 'name must not be empty'],
+    });
+
+    filter.catch(exception, host);
+
+    expect(json).toHaveBeenCalledWith({
+      error: {
+        code: 'BAD_REQUEST',
+        message: 'Validation failed',
+        details: [
+          { field: '', message: 'email must be valid' },
+          { field: '', message: 'name must not be empty' },
+        ],
       },
     });
   });
@@ -103,7 +127,6 @@ describe('GlobalExceptionFilter', () => {
       error: {
         code: 'FORBIDDEN',
         message: 'Access denied',
-        details: undefined,
       },
     });
   });

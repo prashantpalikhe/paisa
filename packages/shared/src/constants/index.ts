@@ -42,6 +42,7 @@ export const PAGINATION = {
 /** Domain events emitted by core modules, consumed by optional modules */
 export const DOMAIN_EVENTS = {
   USER_REGISTERED: 'user.registered',
+  USER_VERIFICATION_RESENT: 'user.verification_resent',
   USER_VERIFIED_EMAIL: 'user.verified_email',
   USER_LOGGED_IN: 'user.logged_in',
   USER_PASSWORD_RESET_REQUESTED: 'user.password_reset_requested',

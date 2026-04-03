@@ -1,0 +1,29 @@
+{
+  // Recommended extensions for the Paisa monorepo.
+  // VS Code will prompt to install these when opening the project.
+  "recommendations": [
+    // Core
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+
+    // TypeScript / NestJS
+    "ms-vscode.vscode-typescript-next",
+    "ashinzekene.nestjs",
+
+    // Prisma
+    "Prisma.prisma",
+
+    // Vue / Nuxt (Phase 3)
+    "vue.volar",
+
+    // Testing
+    "vitest.explorer",
+
+    // Docker
+    "ms-azuretools.vscode-docker",
+
+    // Diagrams
+    "bierner.markdown-mermaid"
+  ]
+}

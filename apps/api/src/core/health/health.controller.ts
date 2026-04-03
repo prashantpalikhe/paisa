@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Public } from '../../common/decorators/public.decorator';
 import { DatabaseService } from '../database/database.service';
 import { AppConfigService } from '../config/config.service';
 
@@ -35,6 +36,7 @@ export class HealthController {
     private readonly config: AppConfigService,
   ) {}
 
+  @Public()
   @Get()
   @ApiOperation({ summary: 'Application health check' })
   async check(): Promise<HealthStatus> {

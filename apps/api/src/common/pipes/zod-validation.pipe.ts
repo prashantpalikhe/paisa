@@ -1,9 +1,10 @@
 import {
   ArgumentMetadata,
+  BadRequestException,
   Injectable,
   PipeTransform,
 } from '@nestjs/common';
-import { ZodSchema } from 'zod';
+import { ZodSchema, ZodError } from 'zod';
 
 /**
  * # Zod Validation Pipe
@@ -21,10 +22,23 @@ import { ZodSchema } from 'zod';
  * }
  * ```
  *
- * ## Error format
+ * ## Error handling
  *
- * Throws `BadRequestException` with field-level error details.
- * The GlobalExceptionFilter converts ZodErrors to the standard error response shape.
+ * On validation failure, throws a `BadRequestException` with a structured payload
+ * that the GlobalExceptionFilter converts to the standard error shape:
+ *
+ * ```json
+ * {
+ *   "error": {
+ *     "code": "VALIDATION_ERROR",
+ *     "message": "Validation failed",
+ *     "details": [
+ *       { "field": "email", "message": "Invalid email address" },
+ *       { "field": "password", "message": "Password must be at least 8 characters" }
+ *     ]
+ *   }
+ * }
+ * ```
  */
 @Injectable()
 export class ZodValidationPipe implements PipeTransform {
@@ -35,9 +49,45 @@ export class ZodValidationPipe implements PipeTransform {
     const result = this.schema.safeParse(value);
 
     if (!result.success) {
-      throw result.error; // ZodError — caught by GlobalExceptionFilter
+      // Convert ZodError into a structured BadRequestException.
+      // This gives us control over the error format instead of relying on
+      // the GlobalExceptionFilter's ZodError detection (which can be fragile
+      // across ESM/CJS module boundaries).
+      const details = this.formatErrors(result.error);
+
+      throw new BadRequestException({
+        code: 'VALIDATION_ERROR',
+        message: 'Validation failed',
+        details,
+      });
     }
 
     return result.data;
+  }
+
+  /**
+   * Convert Zod errors into field-level error details.
+   *
+   * Zod gives us: `{ path: ["email"], message: "Invalid email address" }`
+   * We return:     `{ field: "email", message: "Invalid email address" }`
+   *
+   * Special case: when the entire body is missing (undefined/null),
+   * Zod gives a single error with `path: []` and `message: "Required"`.
+   * We replace that with a clearer message listing the expected fields.
+   */
+  private formatErrors(error: ZodError): Array<{ field: string; message: string }> {
+    return error.errors.map((err) => {
+      const field = err.path.join('.');
+
+      // Empty path means the root value itself is invalid (e.g., body is undefined)
+      if (!field && err.message === 'Required') {
+        return {
+          field: 'body',
+          message: 'Request body is required',
+        };
+      }
+
+      return { field, message: err.message };
+    });
   }
 }

@@ -4,6 +4,8 @@ import { DatabaseModule } from './core/database/database.module';
 import { LoggingModule } from './core/logging/logging.module';
 import { HealthModule } from './core/health/health.module';
 import { EventBusModule } from './common/event-bus/event-bus.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { UserModule } from './modules/user/user.module';
 
 /**
  * # App Module
@@ -13,7 +15,7 @@ import { EventBusModule } from './common/event-bus/event-bus.module';
  * ## Module loading order
  *
  * 1. **Always loaded**: Config, Database, Logging, Health, EventBus
- * 2. **Always loaded**: Auth, User (core domain modules — added in Phase 2)
+ * 2. **Always loaded**: Auth, User (core domain modules)
  * 3. **Conditionally loaded**: Email, Stripe, Cache, Queue, Storage, WebSocket, Sentry
  *
  * Conditional modules are loaded based on feature flags from `AppConfigService`.
@@ -29,8 +31,8 @@ import { EventBusModule } from './common/event-bus/event-bus.module';
     HealthModule,
 
     // ─── Always loaded (core domain) ───
-    // AuthModule,   // Phase 2
-    // UserModule,   // Phase 2
+    AuthModule,
+    UserModule,
 
     // ─── Conditionally loaded (optional integrations) ───
     // Added in Phase 6-8 based on feature flags:

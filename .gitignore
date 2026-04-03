@@ -4,6 +4,7 @@ node_modules/
 
 # Build outputs
 dist/
+*.tsbuildinfo
 .output/
 .nuxt/
 .turbo/
@@ -14,7 +15,10 @@ dist/
 .env.*.local
 
 # IDE
-.vscode/
+# .vscode/ is NOT gitignored — we commit launch.json, extensions.json, and
+# settings.json so all contributors get a consistent dev experience.
+# Only personal workspace files (*.code-workspace) are ignored.
+.vscode/*.code-workspace
 .idea/
 *.swp
 *.swo

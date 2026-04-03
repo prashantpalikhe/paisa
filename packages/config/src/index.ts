@@ -1,3 +1,5 @@
+export { loadEnvFromRoot } from './load-env';
+
 export { featuresSchema, parseFeatures, INFRASTRUCTURE_FLAG_NAMES } from './features';
 export type { Features, InfrastructureFlagName } from './features';
 

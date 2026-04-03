@@ -1,5 +1,45 @@
-import { PrismaClient } from '../src/generated/prisma';
+/**
+ * # Database Seed Script
+ *
+ * Creates initial data for development:
+ * - Admin user (no password — set via auth module or API)
+ * - Sample product with monthly/yearly plans
+ * - Feature flags for maintenance mode and beta signups
+ *
+ * ## Usage
+ *
+ * ```bash
+ * pnpm --filter @paisa/db db:seed
+ * ```
+ *
+ * ## Why upsert?
+ *
+ * We use upsert() instead of create() so this script is idempotent —
+ * you can run it multiple times without duplicating data.
+ */
+import fs from 'node:fs';
+import path from 'node:path';
+import dotenv from 'dotenv';
+import { PrismaClient } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+
+// Load .env from the monorepo root.
+// Same self-contained approach as prisma.config.ts — seed runs before builds.
+function findRoot(dir: string): string | null {
+  dir = path.resolve(dir);
+  const fsRoot = path.parse(dir).root;
+  while (dir !== fsRoot) {
+    if (fs.existsSync(path.join(dir, 'turbo.json'))) return dir;
+    dir = path.dirname(dir);
+  }
+  return null;
+}
+
+const root = findRoot(process.cwd());
+if (root) {
+  dotenv.config({ path: path.join(root, '.env.local') });
+  dotenv.config({ path: path.join(root, '.env') });
+}
 
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
