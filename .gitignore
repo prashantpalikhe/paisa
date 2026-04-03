@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.output/
+.nuxt/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+packages/db/prisma/*.db
+packages/db/prisma/*.db-journal
+packages/db/src/generated/
+
+# Test
+coverage/
+playwright-report/
+test-results/
+
+# Logs
+*.log
+pino-pretty.log
+
+# Docker volumes
+docker/data/
+
+# Uploads (local storage)
+uploads/

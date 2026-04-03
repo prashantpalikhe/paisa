@@ -1,0 +1,244 @@
+// ─── Prisma 7 Schema ───
+// Single source of truth for the database schema.
+// Connection URL is in prisma.config.ts (Prisma 7 requirement).
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs" // Prisma 7 defaults to ESM; NestJS requires CJS
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ──────────────────────────────────────
+// Users
+// ──────────────────────────────────────
+
+model User {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  passwordHash    String? // null for OAuth-only users
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+  role            Role      @default(USER)
+  avatarUrl       String?
+  name            String?
+  banned          Boolean   @default(false)
+  bannedAt        DateTime?
+  bannedReason    String?
+
+  // Relations
+  oauthAccounts  OAuthAccount[]
+  passkeys       Passkey[]
+  twoFactorAuth  TwoFactorAuth?
+  refreshTokens  RefreshToken[]
+  stripeCustomer StripeCustomer?
+  subscriptions  Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+// ──────────────────────────────────────
+// OAuth
+// ──────────────────────────────────────
+
+model OAuthAccount {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider       String // "google"
+  providerUserId String
+  accessToken    String?
+  refreshToken   String?
+  expiresAt      DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerUserId])
+  @@index([userId])
+}
+
+// ──────────────────────────────────────
+// Passkeys (WebAuthn)
+// ──────────────────────────────────────
+
+model Passkey {
+  id                  String   @id @default(cuid())
+  userId              String
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId        String   @unique // base64url-encoded credential ID
+  credentialPublicKey Bytes // stored as raw bytes
+  counter             BigInt   @default(0)
+  transports          String[] // ["usb", "ble", "nfc", "internal"]
+  deviceName          String? // user-friendly name for management UI
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ──────────────────────────────────────
+// Two-Factor Authentication
+// ──────────────────────────────────────
+
+model TwoFactorAuth {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  secret      String // encrypted TOTP secret
+  backupCodes String[] // hashed backup codes
+  verified    Boolean  @default(false) // true after first successful verification
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ──────────────────────────────────────
+// Session / Refresh Tokens
+// ──────────────────────────────────────
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique // hashed token, never store raw
+  family    String // token family for rotation detection
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([family])
+}
+
+// ──────────────────────────────────────
+// Payments (Stripe)
+// ──────────────────────────────────────
+
+model StripeCustomer {
+  id               String @id @default(cuid())
+  userId           String @unique
+  user             User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  stripeCustomerId String @unique
+
+  createdAt DateTime @default(now())
+}
+
+model Product {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  active      Boolean @default(true)
+  metadata    Json? // arbitrary key-value pairs
+  plans       Plan[]
+  sortOrder   Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Plan {
+  id            String  @id @default(cuid())
+  productId     String
+  product       Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name          String // "Monthly", "Yearly"
+  stripePriceId String  @unique
+  priceInCents  Int // 99 = $0.99
+  currency      String  @default("usd")
+  interval      String // "month", "year", "one_time"
+  intervalCount Int     @default(1) // every N intervals
+  trialDays     Int? // optional trial period
+  features      Json // ["Feature A", "Feature B", ...]
+  highlighted   Boolean @default(false) // "Most popular" badge
+  active        Boolean @default(true)
+  sortOrder     Int     @default(0)
+
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  userId               String
+  user                 User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId               String
+  plan                 Plan               @relation(fields: [planId], references: [id])
+  stripeSubscriptionId String             @unique
+  status               SubscriptionStatus
+  currentPeriodStart   DateTime
+  currentPeriodEnd     DateTime
+  cancelAtPeriodEnd    Boolean            @default(false)
+  canceledAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([stripeSubscriptionId])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  UNPAID
+  TRIALING
+  INCOMPLETE
+  INCOMPLETE_EXPIRED
+  PAUSED
+}
+
+// ──────────────────────────────────────
+// Feature Flags (business-level, runtime)
+// ──────────────────────────────────────
+// NOT for infrastructure toggles (Stripe, Redis, etc.)
+// Those are env-var based and require redeploy.
+// See ARCHITECTURE.md §27 Rule 1.
+
+model FeatureFlag {
+  id          String  @id @default(cuid())
+  key         String  @unique // "maintenance_mode", "beta_signups", "max_free_games"
+  enabled     Boolean @default(false)
+  value       Json? // Optional payload: number, string, JSON object
+  description String?
+
+  updatedAt DateTime @updatedAt
+}
+
+// ──────────────────────────────────────
+// Audit Log
+// ──────────────────────────────────────
+
+model AuditLog {
+  id        String  @id @default(cuid())
+  userId    String? // null for system actions
+  action    String // "user.login", "admin.impersonate", "subscription.cancel"
+  target    String? // target entity type + id
+  metadata  Json? // additional context
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
