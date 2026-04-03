@@ -4,16 +4,16 @@
  * Compiles shared types, constants, and Zod validators to JavaScript.
  * Consumed by both the NestJS API and the Nuxt frontend.
  *
- * Why CJS?
- * - NestJS uses CommonJS (`module: "commonjs"` in tsconfig)
- * - Nuxt can import CJS packages fine
- * - One format = simpler setup
+ * Dual format (CJS + ESM):
+ * - NestJS uses CommonJS (`module: "commonjs"` in tsconfig) → reads dist/index.js
+ * - Nuxt 4 / Vite requires ESM with named exports → reads dist/index.mjs
+ * - package.json "exports" field controls which format each consumer gets
  */
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
   entry: ['src/index.ts'],
-  format: ['cjs'],
+  format: ['cjs', 'esm'],
   dts: true,
   clean: true,
   outDir: 'dist',

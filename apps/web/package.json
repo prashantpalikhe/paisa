@@ -1,0 +1,34 @@
+{
+  "name": "@paisa/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 3000",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "typecheck": "nuxt typecheck",
+    "clean": "rm -rf .nuxt .output"
+  },
+  "dependencies": {
+    "@paisa/config": "workspace:*",
+    "@paisa/shared": "workspace:*",
+    "@vueuse/core": "^14.2.1",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-vue-next": "^1.0.0",
+    "nuxt": "^4.4.2",
+    "radix-vue": "^1.9.17",
+    "reka-ui": "^2.9.3",
+    "tailwind-merge": "^3.5.0",
+    "vue": "^3.5.32",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "shadcn-nuxt": "^2.5.1",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^5.9.3",
+    "vue-tsc": "^3.2.6"
+  }
+}

@@ -65,7 +65,7 @@ docker compose -f docker/docker-compose.yml down                    # Stop all
 
 - **Monorepo**: Turborepo + pnpm workspaces + corepack
 - **apps/api**: NestJS 11 (REST, SWC compiler)
-- **apps/web**: Nuxt 4 (planned)
+- **apps/web**: Nuxt 4 + shadcn-vue + Tailwind CSS v4
 - **apps/admin**: Nuxt 4 (planned)
 - **packages/config**: Zod-validated env vars + feature flags + brand config
 - **packages/db**: Prisma 7 + PostgreSQL 17
@@ -151,6 +151,21 @@ API docs title, email templates, and frontend theme all read from this config.
   - Event listener (`email-event.listener.ts`) subscribes to domain events via `@OnEvent()` — all handlers wrap in try/catch (emails are best-effort, never break auth flows)
   - Conditional module loading: `AppModule` computes `optionalModules` array at module-evaluation time using `parseFeatures(process.env)`
 
+### Nuxt Frontend (apps/web)
+- Nuxt 4.4+ with native `app/` directory structure
+- shadcn-vue for UI components (not Nuxt UI). Components live in `app/components/ui/`.
+- Tailwind CSS v4 via `@tailwindcss/vite` Vite plugin (not `@nuxtjs/tailwindcss`). Config is CSS-first in `app/assets/css/tailwind.css`.
+- Colors use OKLCH color space (not HSL). Theme variables defined in CSS, mapped via `@theme inline`.
+- Add new shadcn components: `pnpm dlx shadcn-vue@latest add <component>` from `apps/web/`.
+- Auth: Access token in memory-only JS variable (XSS-safe), refresh token in httpOnly cookie.
+  - `useAuth()` composable: central auth state, token management, API helpers.
+  - `auth.client.ts` plugin: restores session on page load via silent refresh.
+  - `auth` middleware: protects routes, waits for auth loading to resolve.
+  - `guest` middleware: redirects authenticated users away from login/register.
+  - OAuth callback: `/auth/callback` reads token from URL query, stores in memory, clears URL.
+- Zod schemas from `@paisa/shared` used for both client-side validation and API validation.
+- `cn()` utility in `app/lib/utils.ts` for merging Tailwind classes (clsx + tailwind-merge).
+
 ## Documentation
 
 - `docs/request-lifecycle.md` — Mermaid diagrams showing the full request flow through the API
@@ -176,3 +191,7 @@ API docs title, email templates, and frontend theme all read from this config.
 - **GoogleStrategy always registered**: Even when the feature flag is off. `GoogleOAuthGuard` prevents invocation — avoids dynamic module complexity.
 - **Email feature flag in dev/test**: `FEATURE_EMAIL_ENABLED=true` works without `RESEND_API_KEY` in dev/test (Console/InMemory providers don't need it). Production requires the key.
 - **Health e2e test**: Don't hardcode feature flag booleans — they change with `.env`. Use `expect.any(Boolean)` instead.
+- **Tailwind v4 ≠ v3**: No `tailwind.config.ts` — configuration is CSS-first via `@theme inline` in `tailwind.css`. Do NOT install `@nuxtjs/tailwindcss`.
+- **shadcn-vue components are local**: They live in `app/components/ui/` as source files you own. Edit them freely. Add new ones with `pnpm dlx shadcn-vue@latest add <name>`.
+- **`nuxi prepare` before shadcn init**: `.nuxt` types must exist for the shadcn CLI to resolve paths.
+- **Auth middleware waits for loading**: Both `auth.ts` and `guest.ts` middleware watch `isLoading` to avoid incorrect redirects during session restoration on page refresh.
