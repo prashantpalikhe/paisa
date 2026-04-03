@@ -21,7 +21,19 @@ export type {
   VerifyEmailRequest,
   TwoFactorVerifyRequest,
   ChangePasswordRequest,
+  OAuthProvider,
+  OAuthProfile,
 } from './types/auth';
+
+export type {
+  UserRegisteredPayload,
+  UserVerificationResentPayload,
+  UserVerifiedEmailPayload,
+  UserLoggedInPayload,
+  UserPasswordResetRequestedPayload,
+  UserPasswordChangedPayload,
+  UserOAuthLinkedPayload,
+} from './types/domain-events';
 
 export type {
   Product,

@@ -78,15 +78,24 @@ export const featuresSchema = z.object({
     passkey: z.object({ enabled: z.boolean() }),
     twoFactor: z.object({ enabled: z.boolean() }),
   }),
-  email: requiredWhenEnabled(
-    z.object({
-      enabled: z.boolean(),
-      provider: z.enum(['resend']).default('resend'),
-      apiKey: z.string().optional(),
-      fromAddress: z.string().optional(),
-    }),
-    ['apiKey', 'fromAddress'],
-    'Email (Resend)',
+  email: z.object({
+    enabled: z.boolean(),
+    provider: z.enum(['resend']).default('resend'),
+    apiKey: z.string().optional(),
+    fromAddress: z.string().optional(),
+    /** NODE_ENV passed through so we can conditionally require fields */
+    nodeEnv: z.string().optional(),
+  }).refine(
+    (data) => {
+      // apiKey and fromAddress are only required in production.
+      // In dev/test, the Console/InMemory providers don't use them.
+      if (!data.enabled) return true;
+      if (data.nodeEnv !== 'production') return true;
+      return !!(data.apiKey && data.fromAddress);
+    },
+    {
+      message: 'Email (Resend) requires [apiKey, fromAddress] when enabled in production',
+    },
   ),
   stripe: requiredWhenEnabled(
     z.object({
@@ -184,6 +193,7 @@ export function parseFeatures(env: Record<string, string | undefined>): Features
       provider: env.EMAIL_PROVIDER || 'resend',
       apiKey: env.RESEND_API_KEY,
       fromAddress: env.EMAIL_FROM,
+      nodeEnv: env.NODE_ENV,
     },
     stripe: {
       enabled: env.FEATURE_STRIPE_ENABLED === 'true',

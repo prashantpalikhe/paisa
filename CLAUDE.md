@@ -137,12 +137,19 @@ API docs title, email templates, and frontend theme all read from this config.
 - `@UsePipes()` vs `@Body(pipe)`: Use `@Body(new ZodValidationPipe(schema))` on methods that also have `@CurrentUser()`. `@UsePipes()` applies to ALL params including CurrentUser which breaks validation.
 - Email verification/password reset tokens: In-memory Map for now (Phase 8 → Redis).
 - `configureApp()` applies Helmet, cookies, CORS, filters, interceptors. Shared by main.ts and tests.
-- Domain events: Auth emits events (user.registered, user.logged_in, etc.) via EventBus. Email module will listen in Phase 4.
+- Domain events: Auth emits events (user.registered, user.logged_in, etc.) via EventBus. Email module listens.
 - Google OAuth: Feature-flagged via `FEATURE_AUTH_GOOGLE_ENABLED`. Uses `passport-google-oauth20`.
   - `GoogleStrategy` is always registered in providers; `GoogleOAuthGuard` checks the feature flag and returns 404 if disabled.
   - Callback flow: `/auth/google/callback` sets refresh cookie + redirects to `FRONTEND_URL/auth/callback?token=<accessToken>&expiresIn=<expiresIn>`. Frontend reads token from URL, stores in memory, clears URL.
   - Account linking: If a user with the same email exists (email/password), the Google account is linked. No duplicate users. Email is auto-verified.
   - New users via OAuth have `passwordHash: null` and `emailVerified: true`.
+- Email module: Feature-flagged via `FEATURE_EMAIL_ENABLED`. Three-tier provider setup:
+  - Development (`NODE_ENV=development`): ConsoleEmailProvider — prints emails to terminal
+  - Test (`NODE_ENV=test`): InMemoryEmailProvider — captures emails for assertions via `getSentEmails()`
+  - Production (`NODE_ENV=production`): ResendEmailProvider — real delivery via Resend API (requires `RESEND_API_KEY`, `EMAIL_FROM`)
+  - Templates are pure functions in `email/templates/` — no templating engine, just TypeScript string functions
+  - Event listener (`email-event.listener.ts`) subscribes to domain events via `@OnEvent()` — all handlers wrap in try/catch (emails are best-effort, never break auth flows)
+  - Conditional module loading: `AppModule` computes `optionalModules` array at module-evaluation time using `parseFeatures(process.env)`
 
 ## Documentation
 
@@ -167,3 +174,5 @@ API docs title, email templates, and frontend theme all read from this config.
 - **tsup + incremental TS**: tsup DTS generation conflicts with `incremental: true` in tsconfig. Each package has a `tsconfig.build.json` with `incremental: false`.
 - **OAuth callback uses `@Res()` not `@Res({ passthrough: true })`**: Because it issues a redirect, not a JSON response. NestJS interceptors are bypassed.
 - **GoogleStrategy always registered**: Even when the feature flag is off. `GoogleOAuthGuard` prevents invocation — avoids dynamic module complexity.
+- **Email feature flag in dev/test**: `FEATURE_EMAIL_ENABLED=true` works without `RESEND_API_KEY` in dev/test (Console/InMemory providers don't need it). Production requires the key.
+- **Health e2e test**: Don't hardcode feature flag booleans — they change with `.env`. Use `expect.any(Boolean)` instead.

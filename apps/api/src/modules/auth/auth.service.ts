@@ -377,6 +377,11 @@ export class AuthService {
   async resetPassword(token: string, newPassword: string): Promise<void> {
     const stored = this.validateAndConsumeToken(token, 'password_reset');
 
+    // Look up the user so we can include email in the event payload.
+    // The email module needs this to send the "password changed" notification
+    // without having to query the database itself.
+    const user = await this.userService.findById(stored.userId);
+
     // Update the password
     await this.userService.updatePassword(stored.userId, newPassword);
 
@@ -385,6 +390,8 @@ export class AuthService {
 
     this.eventBus.emit(DOMAIN_EVENTS.USER_PASSWORD_CHANGED, {
       userId: stored.userId,
+      email: user?.email,
+      name: user?.name,
     });
 
     this.logger.log(`Password reset completed for user: ${stored.userId}`);
@@ -430,6 +437,8 @@ export class AuthService {
 
     this.eventBus.emit(DOMAIN_EVENTS.USER_PASSWORD_CHANGED, {
       userId,
+      email: user.email,
+      name: user.name,
     });
 
     this.logger.log(`Password changed for user: ${userId}`);
