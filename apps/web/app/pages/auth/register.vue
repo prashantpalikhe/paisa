@@ -16,7 +16,7 @@
     </CardHeader>
     <CardContent class="space-y-4">
       <!-- Register Form -->
-      <form class="space-y-4" @submit.prevent="onSubmit">
+      <form class="space-y-4" novalidate @submit.prevent="onSubmit">
         <div class="space-y-2">
           <Label for="name">Name</Label>
           <div class="relative">

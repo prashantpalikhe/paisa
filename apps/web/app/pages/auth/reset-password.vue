@@ -39,7 +39,7 @@
       </div>
 
       <!-- Reset form -->
-      <form v-else class="space-y-4" @submit.prevent="onSubmit">
+      <form v-else class="space-y-4" novalidate @submit.prevent="onSubmit">
         <div class="space-y-2">
           <Label for="password">New password</Label>
           <div class="relative">

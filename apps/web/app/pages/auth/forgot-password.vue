@@ -33,7 +33,7 @@
       </div>
 
       <!-- Form state -->
-      <form v-else class="space-y-4" @submit.prevent="onSubmit">
+      <form v-else class="space-y-4" novalidate @submit.prevent="onSubmit">
         <div class="space-y-2">
           <Label for="email">Email</Label>
           <div class="relative">

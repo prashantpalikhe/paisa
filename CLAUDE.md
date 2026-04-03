@@ -40,7 +40,8 @@ pnpm build                        # Build all packages + apps
 pnpm --filter @paisa/api dev      # Start API only (builds deps first via turbo)
 pnpm test                         # Unit tests across all packages
 pnpm --filter @paisa/api test     # Unit tests for API only
-pnpm --filter @paisa/api test:e2e # E2e tests (needs test DB running)
+pnpm --filter @paisa/api test:e2e # API e2e tests (needs test DB running)
+pnpm test:e2e:web                 # Frontend Playwright e2e tests (needs test DB + both servers)
 
 # Build workspace packages (required before API can start)
 pnpm --filter @paisa/config build
@@ -90,15 +91,28 @@ NEVER add middleware directly in `main.ts` — add it to `configureApp()`.
 - Error: `{ error: { code: string, message: string, details?: [] } }`
 - Exception: `/health` returns raw (not wrapped)
 
-### Testing
-- Unit tests: `src/**/*.spec.ts`, mocked dependencies, fast
-- E2e tests: `test/e2e/**/*.spec.ts`, real DB on port 5433, sequential
+### Testing — three levels
+- **Unit tests** (`apps/api/src/**/*.spec.ts`): Mocked dependencies, fast, run with `pnpm test`
+- **API e2e tests** (`apps/api/test/e2e/**/*.spec.ts`): Real DB on port 5433, sequential, run with `pnpm --filter @paisa/api test:e2e`
+- **Frontend e2e tests** (`e2e/tests/**/*.spec.ts`): Playwright + real browser + real API + real DB, run with `pnpm test:e2e:web`
 - Factories in `test/factories/` — use these, don't write raw `prisma.create()`
-- Every e2e test file: `beforeEach(() => resetDatabase(prisma))`
+- Every API e2e test file: `beforeEach(() => resetDatabase(prisma))`
+
+### Frontend Playwright e2e tests
+- Config: `e2e/playwright.config.ts` — starts both API (port 3001) and Nuxt (port 3000) automatically
+- Global setup: `e2e/global-setup.ts` — waits for postgres-test, runs migrations, builds packages
+- Fixtures: `e2e/fixtures/index.ts` — `resetDb` auto-fixture truncates all tables before each test, `api` fixture provides `APIRequestContext` for direct API calls
+- Test infrastructure: `apps/api/src/test/test.module.ts` + `test.controller.ts` — test-only HTTP endpoints (POST /test/reset-database, GET /test/emails, DELETE /test/emails). Only loaded when `NODE_ENV=test`.
+- Email testing: API runs with `FEATURE_EMAIL_ENABLED=true` + `NODE_ENV=test` → `InMemoryEmailProvider` captures emails → Playwright reads them via `GET /test/emails`. Use `waitForEmails()` helper for polling (email sending is async via EventBus).
+- Selector strategy: Use `page.locator('#id')` for form inputs (reka-ui Label doesn't work with Playwright's `getByLabel()`). Use `getByRole()` for headings/buttons. Use `exact: true` when names are ambiguous.
+- All forms use `novalidate` attribute so Zod validation handles everything (prevents browser HTML5 validation tooltips from interfering).
+- `reuseExistingServer: true` in dev — if API/Nuxt are already running, Playwright reuses them. Kill stale servers if env vars need to change.
 
 ### Package builds (tsup)
 - `@paisa/config`, `@paisa/shared`, `@paisa/db` compile TS → JS via tsup
-- `"main"` in package.json points to `./dist/index.js` (compiled JS)
+- **Dual-format builds**: `@paisa/config` and `@paisa/shared` output both CJS (`.js`) and ESM (`.mjs`). NestJS consumes CJS, Vite/Nuxt consumes ESM.
+- `"exports"` field in package.json: `"types"` first, then `"import"` (mjs), then `"require"` (js). Order matters — esbuild warns if types isn't first.
+- `"main"` points to `./dist/index.js` (CJS fallback), `"module"` points to `./dist/index.mjs` (ESM)
 - `"types"` still points to `./src/index.ts` (raw TS for IDE support)
 - Turborepo `dev` task depends on `^build` — packages build before apps start
 - After changing package source: run `pnpm build` or let turbo handle it
@@ -169,6 +183,8 @@ API docs title, email templates, and frontend theme all read from this config.
 ## Documentation
 
 - `docs/request-lifecycle.md` — Mermaid diagrams showing the full request flow through the API
+- `e2e/playwright.config.ts` — Playwright config with multi-server setup, env vars, and browser config
+- `e2e/fixtures/index.ts` — Custom fixtures (resetDb, api) and TEST_USER constants
 - `.vscode/launch.json` — One-click run/debug configs for API, tests, Prisma Studio
 - `.vscode/extensions.json` — Recommended VS Code extensions
 
@@ -195,3 +211,7 @@ API docs title, email templates, and frontend theme all read from this config.
 - **shadcn-vue components are local**: They live in `app/components/ui/` as source files you own. Edit them freely. Add new ones with `pnpm dlx shadcn-vue@latest add <name>`.
 - **`nuxi prepare` before shadcn init**: `.nuxt` types must exist for the shadcn CLI to resolve paths.
 - **Auth middleware waits for loading**: Both `auth.ts` and `guest.ts` middleware watch `isLoading` to avoid incorrect redirects during session restoration on page refresh.
+- **EmailModule is global**: `EmailModule.register()` sets `global: true` so `EMAIL_PROVIDER` is injectable in any module (e.g. `TestModule`). Without this, `@Optional() @Inject(EMAIL_PROVIDER)` in `TestController` resolves to `undefined`.
+- **TestModule only in test**: `TestModule` is conditionally imported in `AppModule` via `...(process.env.NODE_ENV === 'test' ? [TestModule] : [])`. In production, the endpoints don't exist at all.
+- **Playwright `getByLabel()` + reka-ui**: Playwright can't resolve labels through reka-ui's Label component chain. Use `page.locator('#id')` for form inputs instead.
+- **Playwright reuses running servers**: With `reuseExistingServer: true`, if the API is already running with `NODE_ENV=development`, email tests will fail because `InMemoryEmailProvider` is only used in test mode. Kill stale servers before running `pnpm test:e2e:web`.

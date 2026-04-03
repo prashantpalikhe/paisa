@@ -54,6 +54,7 @@ export class EmailModule {
   static register(): DynamicModule {
     return {
       module: EmailModule,
+      global: true, // Make EMAIL_PROVIDER available to all modules (e.g. TestModule)
       providers: [
         // The event listener — subscribes to domain events and sends emails
         EmailEventListener,

@@ -8,6 +8,7 @@ import { EventBusModule } from './common/event-bus/event-bus.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { EmailModule } from './modules/email/email.module';
+import { TestModule } from './test/test.module';
 
 /**
  * # App Module
@@ -63,6 +64,9 @@ const optionalModules = [
 
     // ─── Conditionally loaded (optional integrations) ───
     ...optionalModules,
+
+    // ─── Test-only module (database reset, email inbox for Playwright) ───
+    ...(process.env.NODE_ENV === 'test' ? [TestModule] : []),
   ],
 })
 export class AppModule {}
