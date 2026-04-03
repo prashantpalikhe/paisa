@@ -18,36 +18,48 @@
           <span class="text-xl font-bold text-foreground">Paisa</span>
         </NuxtLink>
 
-        <!-- Right: User dropdown -->
-        <DropdownMenu v-if="user">
-          <DropdownMenuTrigger as-child>
-            <Button variant="ghost" class="gap-2">
-              <User class="h-4 w-4" />
-              <span>{{ user.name || user.email }}</span>
-              <ChevronDown class="h-4 w-4 opacity-50" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" class="w-56">
-            <DropdownMenuLabel>
-              {{ user.email }}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem as-child>
-              <NuxtLink to="/dashboard" class="flex items-center gap-2">
-                <LayoutDashboard class="h-4 w-4" />
-                Dashboard
-              </NuxtLink>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem class="gap-2" @click="logout">
-              <LogOut class="h-4 w-4" />
-              Logout
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <!-- Right: User dropdown or skeleton while loading -->
+        <div class="flex items-center">
+          <!--
+            Skeleton placeholder — matches the trigger button dimensions
+            to prevent layout shift during auth restore on page reload.
+          -->
+          <div
+            v-if="isLoading && !user"
+            class="flex h-9 items-center gap-2 rounded-md px-3"
+          >
+            <div class="h-4 w-4 animate-pulse rounded-full bg-muted" />
+            <div class="h-4 w-20 animate-pulse rounded bg-muted" />
+            <div class="h-4 w-4 animate-pulse rounded bg-muted" />
+          </div>
 
-        <!-- Loading state while auth is resolving -->
-        <div v-else class="h-8 w-24 animate-pulse rounded-md bg-muted" />
+          <DropdownMenu v-else-if="user">
+            <DropdownMenuTrigger as-child>
+              <Button variant="ghost" class="gap-2">
+                <User class="h-4 w-4" />
+                <span>{{ user.name || user.email }}</span>
+                <ChevronDown class="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" class="w-56">
+              <DropdownMenuLabel>
+                {{ user.email }}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem as-child>
+                <NuxtLink to="/dashboard" class="flex items-center gap-2">
+                  <LayoutDashboard class="h-4 w-4" />
+                  Dashboard
+                </NuxtLink>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem class="gap-2" @click="logout">
+                <LogOut class="h-4 w-4" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </header>
 
@@ -61,5 +73,5 @@
 <script setup lang="ts">
 import { ChevronDown, LayoutDashboard, LogOut, User } from 'lucide-vue-next'
 
-const { user, logout } = useAuth()
+const { user, isLoading, logout } = useAuth()
 </script>

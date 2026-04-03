@@ -157,6 +157,22 @@ API docs title, email templates, and frontend theme all read from this config.
   - Callback flow: `/auth/google/callback` sets refresh cookie + redirects to `FRONTEND_URL/auth/callback?token=<accessToken>&expiresIn=<expiresIn>`. Frontend reads token from URL, stores in memory, clears URL.
   - Account linking: If a user with the same email exists (email/password), the Google account is linked. No duplicate users. Email is auto-verified.
   - New users via OAuth have `passwordHash: null` and `emailVerified: true`.
+  - **Setup guide** (when forking the boilerplate):
+    1. Go to [console.cloud.google.com](https://console.cloud.google.com) → create a project
+    2. **APIs & Services → OAuth consent screen** → External → fill app name, support email, authorized domains
+    3. **APIs & Services → Credentials → Create Credentials → OAuth 2.0 Client ID**
+       - Application type: **Web application**
+       - Authorized JavaScript origins: `http://localhost:3000` (dev), `https://yourdomain.com` (prod)
+       - Authorized redirect URIs: `http://localhost:3001/auth/google/callback` (dev), `https://api.yourdomain.com/auth/google/callback` (prod)
+    4. Copy Client ID and Client Secret into `.env`:
+       ```
+       FEATURE_AUTH_GOOGLE_ENABLED=true
+       GOOGLE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+       GOOGLE_CLIENT_SECRET=GOCSPX-your-secret
+       GOOGLE_CALLBACK_URL=http://localhost:3001/auth/google/callback
+       ```
+    5. Restart the API server — "Continue with Google" buttons on login/register are always visible but the backend returns 404 when the flag is off
+    6. For production: update `GOOGLE_CALLBACK_URL` to your real API domain, add production origins/redirects in Google Console, and publish the OAuth consent screen
 - Email module: Feature-flagged via `FEATURE_EMAIL_ENABLED`. Three-tier provider setup:
   - Development (`NODE_ENV=development`): ConsoleEmailProvider — prints emails to terminal
   - Test (`NODE_ENV=test`): InMemoryEmailProvider — captures emails for assertions via `getSentEmails()`
