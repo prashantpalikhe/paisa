@@ -15,6 +15,9 @@
  *
  * If you change a Zod schema in @paisa/shared, update the matching DTO
  * here too. The DTO is documentation — the Zod schema is the source of truth.
+ *
+ * TODO: Consider generating DTOs from Zod schemas automatically using
+ * `nestjs-zod` or `@anatine/zod-nestjs` to eliminate drift risk.
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 

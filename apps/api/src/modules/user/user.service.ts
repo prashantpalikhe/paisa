@@ -39,6 +39,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as argon2 from 'argon2';
 import { DatabaseService } from '../../core/database/database.service';
 import type { User } from '@paisa/db';
+import type { OAuthProfile } from '@paisa/shared';
 
 /** Fields needed to create a new user */
 export interface CreateUserInput {
@@ -146,5 +147,127 @@ export class UserService {
         emailVerifiedAt: new Date(),
       },
     });
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // OAuth
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /**
+   * Find or create a user from an OAuth provider profile.
+   *
+   * Three scenarios:
+   *
+   * 1. **Returning OAuth user**: OAuthAccount exists for this provider + providerUserId.
+   *    → Return the linked user. (Most common case — returning login.)
+   *
+   * 2. **Account linking**: A user with the same email exists (registered with
+   *    email/password) but no OAuthAccount for this provider.
+   *    → Link the OAuth account to the existing user. Auto-verify email
+   *    (the OAuth provider already verified it).
+   *
+   * 3. **New user**: No user with this email exists.
+   *    → Create a new user (no password) + OAuthAccount in a transaction.
+   *    Email is auto-verified.
+   *
+   * Returns `{ user, isNewUser }` so the caller can emit the right event.
+   */
+  async findOrCreateOAuthUser(
+    profile: OAuthProfile,
+  ): Promise<{ user: User; isNewUser: boolean }> {
+    // ── Scenario 1: Returning OAuth user ──
+    const existingOAuth = await this.db.oAuthAccount.findUnique({
+      where: {
+        provider_providerUserId: {
+          provider: profile.provider,
+          providerUserId: profile.providerUserId,
+        },
+      },
+      include: { user: true },
+    });
+
+    if (existingOAuth) {
+      // Update stored OAuth tokens (they may have been refreshed by the provider)
+      await this.db.oAuthAccount.update({
+        where: { id: existingOAuth.id },
+        data: {
+          accessToken: profile.accessToken ?? existingOAuth.accessToken,
+          refreshToken: profile.refreshToken ?? existingOAuth.refreshToken,
+          expiresAt: profile.expiresAt ?? existingOAuth.expiresAt,
+        },
+      });
+
+      this.logger.log(
+        `Returning OAuth user: ${existingOAuth.user.id} (${profile.provider})`,
+      );
+      return { user: existingOAuth.user, isNewUser: false };
+    }
+
+    // ── Scenario 2: Account linking ──
+    const existingUser = await this.findByEmail(profile.email);
+
+    if (existingUser) {
+      // Link the new OAuth provider to the existing account
+      await this.db.oAuthAccount.create({
+        data: {
+          userId: existingUser.id,
+          provider: profile.provider,
+          providerUserId: profile.providerUserId,
+          accessToken: profile.accessToken,
+          refreshToken: profile.refreshToken,
+          expiresAt: profile.expiresAt,
+        },
+      });
+
+      // Auto-verify email (OAuth provider has verified it) and fill in
+      // missing profile data if the user hasn't set them manually.
+      const updatedUser = await this.db.user.update({
+        where: { id: existingUser.id },
+        data: {
+          emailVerified: true,
+          emailVerifiedAt: existingUser.emailVerifiedAt ?? new Date(),
+          avatarUrl: existingUser.avatarUrl ?? profile.avatarUrl ?? null,
+          name: existingUser.name ?? profile.name ?? null,
+        },
+      });
+
+      this.logger.log(
+        `OAuth account linked: ${existingUser.id} ← ${profile.provider}`,
+      );
+      return { user: updatedUser, isNewUser: false };
+    }
+
+    // ── Scenario 3: New user ──
+    // Use a transaction to ensure user + OAuth account are created atomically.
+    const newUser = await this.db.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: profile.email.toLowerCase().trim(),
+          passwordHash: null, // OAuth users don't have passwords
+          name: profile.name?.trim() || null,
+          avatarUrl: profile.avatarUrl || null,
+          emailVerified: true, // OAuth provider verified the email
+          emailVerifiedAt: new Date(),
+        },
+      });
+
+      await tx.oAuthAccount.create({
+        data: {
+          userId: user.id,
+          provider: profile.provider,
+          providerUserId: profile.providerUserId,
+          accessToken: profile.accessToken,
+          refreshToken: profile.refreshToken,
+          expiresAt: profile.expiresAt,
+        },
+      });
+
+      return user;
+    });
+
+    this.logger.log(
+      `New OAuth user created: ${newUser.id} (${profile.provider})`,
+    );
+    return { user: newUser, isNewUser: true };
   }
 }

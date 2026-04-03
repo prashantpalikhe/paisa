@@ -407,4 +407,28 @@ describe('Auth (e2e)', () => {
       .send({ currentPassword: 'Password123', newPassword: 'NewPassword456' })
       .expect(401);
   });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GOOGLE OAUTH (feature-flagged)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // The full OAuth redirect flow can't be tested without a real Google
+  // consent screen. But we CAN test that the endpoints respect the
+  // feature flag — they should return 404 when Google OAuth is disabled
+  // (which is the default in the test environment).
+
+  it('GET /auth/google → 404 when FEATURE_AUTH_GOOGLE_ENABLED is false', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/auth/google')
+      .expect(404);
+
+    expect(res.body.error.message).toContain('Google OAuth is not enabled');
+  });
+
+  it('GET /auth/google/callback → 404 when FEATURE_AUTH_GOOGLE_ENABLED is false', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/auth/google/callback')
+      .expect(404);
+
+    expect(res.body.error.message).toContain('Google OAuth is not enabled');
+  });
 });

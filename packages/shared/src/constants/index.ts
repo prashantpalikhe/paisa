@@ -52,4 +52,5 @@ export const DOMAIN_EVENTS = {
   SUBSCRIPTION_RENEWED: 'subscription.renewed',
   PAYMENT_SUCCEEDED: 'payment.succeeded',
   PAYMENT_FAILED: 'payment.failed',
+  USER_OAUTH_LINKED: 'user.oauth_linked',
 } as const;

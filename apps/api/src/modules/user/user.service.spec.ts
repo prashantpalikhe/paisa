@@ -27,6 +27,13 @@ const mockDb = {
     findUnique: vi.fn(),
     update: vi.fn(),
   },
+  oAuthAccount: {
+    findUnique: vi.fn(),
+    create: vi.fn(),
+    update: vi.fn(),
+  },
+  // $transaction executes the callback with the same mock db (simplified)
+  $transaction: vi.fn((cb: (tx: any) => Promise<any>) => cb(mockDb)),
 };
 
 describe('UserService', () => {
@@ -172,5 +179,125 @@ describe('UserService', () => {
     const updateCall = mockDb.user.update.mock.calls[0][0];
     expect(updateCall.data.emailVerified).toBe(true);
     expect(updateCall.data.emailVerifiedAt).toBeInstanceOf(Date);
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // findOrCreateOAuthUser()
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  const googleProfile = {
+    provider: 'google' as const,
+    providerUserId: 'google-123',
+    email: 'oauth@example.com',
+    name: 'OAuth User',
+    avatarUrl: 'https://example.com/photo.jpg',
+    accessToken: 'google-access-token',
+    refreshToken: 'google-refresh-token',
+  };
+
+  it('should return existing user when OAuthAccount already exists', async () => {
+    const existingUser = { id: 'user-3', email: 'oauth@example.com' };
+    mockDb.oAuthAccount.findUnique.mockResolvedValue({
+      id: 'oauth-1',
+      user: existingUser,
+      accessToken: 'old-token',
+      refreshToken: 'old-refresh',
+      expiresAt: null,
+    });
+    mockDb.oAuthAccount.update.mockResolvedValue({});
+
+    const result = await service.findOrCreateOAuthUser(googleProfile);
+
+    expect(result.user).toEqual(existingUser);
+    expect(result.isNewUser).toBe(false);
+
+    // Should update the stored OAuth tokens
+    expect(mockDb.oAuthAccount.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'oauth-1' },
+        data: expect.objectContaining({
+          accessToken: 'google-access-token',
+        }),
+      }),
+    );
+
+    // Should NOT create a new user or OAuth account
+    expect(mockDb.user.create).not.toHaveBeenCalled();
+    expect(mockDb.oAuthAccount.create).not.toHaveBeenCalled();
+  });
+
+  it('should link OAuth account to existing user with same email', async () => {
+    // No existing OAuthAccount for this provider
+    mockDb.oAuthAccount.findUnique.mockResolvedValue(null);
+    // But a user with this email exists (registered with email/password)
+    const existingUser = {
+      id: 'user-4',
+      email: 'oauth@example.com',
+      name: 'Existing User',
+      avatarUrl: null,
+      emailVerifiedAt: null,
+    };
+    mockDb.user.findUnique.mockResolvedValue(existingUser);
+    const updatedUser = { ...existingUser, emailVerified: true, avatarUrl: 'https://example.com/photo.jpg' };
+    mockDb.user.update.mockResolvedValue(updatedUser);
+
+    const result = await service.findOrCreateOAuthUser(googleProfile);
+
+    expect(result.user.emailVerified).toBe(true);
+    expect(result.user.avatarUrl).toBe('https://example.com/photo.jpg');
+    expect(result.isNewUser).toBe(false);
+
+    // Should create the OAuthAccount link
+    expect(mockDb.oAuthAccount.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: 'user-4',
+          provider: 'google',
+          providerUserId: 'google-123',
+        }),
+      }),
+    );
+
+    // Should auto-verify the email
+    expect(mockDb.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          emailVerified: true,
+        }),
+      }),
+    );
+  });
+
+  it('should create new user when no matching email exists', async () => {
+    // No existing OAuthAccount
+    mockDb.oAuthAccount.findUnique.mockResolvedValue(null);
+    // No existing user with this email
+    mockDb.user.findUnique.mockResolvedValue(null);
+    // Transaction creates the user
+    const newUser = {
+      id: 'user-5',
+      email: 'oauth@example.com',
+      name: 'OAuth User',
+      passwordHash: null,
+      emailVerified: true,
+    };
+    mockDb.user.create.mockResolvedValue(newUser);
+    mockDb.oAuthAccount.create.mockResolvedValue({});
+
+    const result = await service.findOrCreateOAuthUser(googleProfile);
+
+    expect(result.user).toEqual(newUser);
+    expect(result.isNewUser).toBe(true);
+
+    // Should create user with no password and email pre-verified
+    expect(mockDb.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: 'oauth@example.com',
+          passwordHash: null,
+          emailVerified: true,
+        }),
+      }),
+    );
   });
 });

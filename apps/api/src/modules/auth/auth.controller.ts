@@ -13,6 +13,8 @@
  *   POST /auth/forgot-password → Request password reset email
  *   POST /auth/reset-password  → Reset password with token
  *   POST /auth/verify-email    → Verify email with token
+ *   GET  /auth/google          → Redirect to Google consent screen
+ *   GET  /auth/google/callback → Google redirects here → issue tokens → redirect to frontend
  *
  * PROTECTED (auth required):
  *   GET    /auth/me              → Get current user profile
@@ -43,6 +45,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Post,
   Req,
   Res,
@@ -50,7 +53,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { ApiOperation, ApiTags, ApiBody, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiOperation, ApiTags, ApiBody, ApiResponse, ApiBearerAuth, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Response, Request } from 'express';
 import {
   registerSchema,
@@ -64,6 +67,8 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AppConfigService } from '../../core/config/config.service';
 import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
+import { GoogleOAuthGuard } from './guards/google-oauth.guard';
+import type { GoogleOAuthResult } from './strategies/google.strategy';
 import {
   RegisterDto,
   LoginDto,
@@ -85,6 +90,8 @@ const REFRESH_TOKEN_COOKIE = 'refresh_token';
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly config: AppConfigService,
@@ -256,6 +263,88 @@ export class AuthController {
   async verifyEmail(@Body(new ZodValidationPipe(verifyEmailSchema)) body: { token: string }) {
     await this.authService.verifyEmail(body.token);
     return { message: 'Email verified successfully.' };
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GOOGLE OAUTH
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /**
+   * Initiate Google OAuth flow.
+   *
+   * Redirects the browser to Google's consent screen.
+   * This method body never executes — Passport intercepts and redirects.
+   *
+   * The GoogleOAuthGuard checks the feature flag first:
+   * - If FEATURE_AUTH_GOOGLE_ENABLED=false → 404 (endpoint doesn't exist)
+   * - If enabled → Passport redirects to Google
+   */
+  @Public()
+  @Get('google')
+  @UseGuards(GoogleOAuthGuard)
+  @ApiOperation({ summary: 'Initiate Google OAuth login' })
+  @ApiResponse({ status: 302, description: 'Redirects to Google consent screen' })
+  @ApiResponse({ status: 404, description: 'Google OAuth is not enabled' })
+  googleAuth() {
+    // Passport handles the redirect — this body never runs
+  }
+
+  /**
+   * Google OAuth callback.
+   *
+   * Google redirects here after the user grants (or denies) consent.
+   * Passport exchanges the authorization code for tokens and calls
+   * GoogleStrategy.validate(), which:
+   * 1. Finds or creates the user (+ links accounts if needed)
+   * 2. Generates JWT access token + refresh token
+   * 3. Attaches the result to request.user
+   *
+   * We then set the refresh token as an httpOnly cookie and redirect
+   * to the frontend with the access token in the URL.
+   *
+   * Why redirect instead of JSON?
+   * This is a browser redirect from Google — we can't return JSON.
+   * The frontend reads the token from the URL, stores it in memory,
+   * and clears the URL parameter immediately.
+   *
+   * Why @Res() without passthrough?
+   * We call res.redirect() directly, so NestJS interceptors (like
+   * ResponseTransformInterceptor) should NOT process the return value.
+   * Using @Res() (not @Res({ passthrough: true })) tells NestJS we're
+   * handling the response ourselves.
+   */
+  @Public()
+  @Get('google/callback')
+  @UseGuards(GoogleOAuthGuard)
+  @ApiExcludeEndpoint() // Don't show in Swagger — it's a browser redirect, not an API call
+  async googleCallback(
+    @Req() req: Request & { user: GoogleOAuthResult },
+    @Res() res: Response,
+  ) {
+    const frontendUrl = this.config.env.FRONTEND_URL;
+
+    try {
+      const { user, tokenPair } = req.user;
+
+      // Set refresh token as httpOnly cookie (same as login/register)
+      this.setRefreshCookie(res, tokenPair.refreshToken);
+
+      // Redirect to frontend with access token in URL.
+      // The frontend reads the token, stores it in memory, and clears the URL.
+      const redirectUrl = new URL('/auth/callback', frontendUrl);
+      redirectUrl.searchParams.set('token', tokenPair.accessToken);
+      redirectUrl.searchParams.set('expiresIn', String(tokenPair.expiresIn));
+
+      return res.redirect(redirectUrl.toString());
+    } catch (error) {
+      // If anything goes wrong, redirect to frontend with error
+      this.logger.error('Google OAuth callback error:', error);
+
+      const errorUrl = new URL('/auth/callback', frontendUrl);
+      errorUrl.searchParams.set('error', 'oauth_failed');
+
+      return res.redirect(errorUrl.toString());
+    }
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -80,6 +80,7 @@ import { TokenService, type TokenPair } from './token.service';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
 import { DOMAIN_EVENTS } from '@paisa/shared';
 import type { User } from '@paisa/db';
+import type { OAuthProfile } from '@paisa/shared';
 
 /**
  * In-memory token store for email verification and password reset.
@@ -432,6 +433,77 @@ export class AuthService {
     });
 
     this.logger.log(`Password changed for user: ${userId}`);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // OAUTH LOGIN
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /**
+   * Handle login/registration via an OAuth provider (e.g., Google).
+   *
+   * Called by the OAuth Passport strategy after the provider callback.
+   * Delegates to UserService.findOrCreateOAuthUser() for the find-or-create
+   * + account linking logic, then generates tokens and emits events.
+   *
+   * Flow:
+   * 1. Find or create the user (+ link OAuth account if needed)
+   * 2. Check if the user is banned
+   * 3. Generate access + refresh tokens
+   * 4. Emit the appropriate event (registered vs logged_in vs oauth_linked)
+   * 5. Return tokens + user (controller handles the redirect)
+   */
+  async handleOAuthLogin(
+    profile: OAuthProfile,
+    req?: { userAgent?: string; ip?: string },
+  ): Promise<{ user: User; tokenPair: TokenPair; isNewUser: boolean }> {
+    // Find or create the user (handles all 3 scenarios: returning, linking, new)
+    const { user, isNewUser } =
+      await this.userService.findOrCreateOAuthUser(profile);
+
+    // Check if the account is banned
+    if (user.banned) {
+      throw new UnauthorizedException(
+        'Your account has been suspended. Please contact support.',
+      );
+    }
+
+    // Generate authentication tokens
+    const { accessToken, expiresIn } =
+      this.tokenService.generateAccessToken(user);
+    const refreshToken = await this.tokenService.generateRefreshToken(
+      user,
+      null, // New OAuth login → new family
+      req,
+    );
+
+    // Emit the right event so downstream modules (email, analytics) can react
+    if (isNewUser) {
+      this.eventBus.emit(DOMAIN_EVENTS.USER_REGISTERED, {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        oauthProvider: profile.provider,
+      });
+      this.logger.log(
+        `New user registered via ${profile.provider}: ${user.id}`,
+      );
+    } else {
+      this.eventBus.emit(DOMAIN_EVENTS.USER_LOGGED_IN, {
+        userId: user.id,
+        email: user.email,
+        oauthProvider: profile.provider,
+      });
+      this.logger.log(
+        `User logged in via ${profile.provider}: ${user.id}`,
+      );
+    }
+
+    return {
+      user,
+      tokenPair: { accessToken, expiresIn, refreshToken },
+      isNewUser,
+    };
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

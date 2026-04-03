@@ -138,6 +138,11 @@ API docs title, email templates, and frontend theme all read from this config.
 - Email verification/password reset tokens: In-memory Map for now (Phase 8 → Redis).
 - `configureApp()` applies Helmet, cookies, CORS, filters, interceptors. Shared by main.ts and tests.
 - Domain events: Auth emits events (user.registered, user.logged_in, etc.) via EventBus. Email module will listen in Phase 4.
+- Google OAuth: Feature-flagged via `FEATURE_AUTH_GOOGLE_ENABLED`. Uses `passport-google-oauth20`.
+  - `GoogleStrategy` is always registered in providers; `GoogleOAuthGuard` checks the feature flag and returns 404 if disabled.
+  - Callback flow: `/auth/google/callback` sets refresh cookie + redirects to `FRONTEND_URL/auth/callback?token=<accessToken>&expiresIn=<expiresIn>`. Frontend reads token from URL, stores in memory, clears URL.
+  - Account linking: If a user with the same email exists (email/password), the Google account is linked. No duplicate users. Email is auto-verified.
+  - New users via OAuth have `passwordHash: null` and `emailVerified: true`.
 
 ## Documentation
 
@@ -160,3 +165,5 @@ API docs title, email templates, and frontend theme all read from this config.
 - **@Public() on health**: Health endpoint must have `@Public()` since JWT guard is global
 - **Passport LocalStrategy**: Uses `usernameField: 'email'` — Passport defaults to 'username'
 - **tsup + incremental TS**: tsup DTS generation conflicts with `incremental: true` in tsconfig. Each package has a `tsconfig.build.json` with `incremental: false`.
+- **OAuth callback uses `@Res()` not `@Res({ passthrough: true })`**: Because it issues a redirect, not a JSON response. NestJS interceptors are bypassed.
+- **GoogleStrategy always registered**: Even when the feature flag is off. `GoogleOAuthGuard` prevents invocation — avoids dynamic module complexity.

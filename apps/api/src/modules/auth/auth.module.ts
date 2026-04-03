@@ -17,6 +17,8 @@
  *         │     ├── TokenService (JWT + refresh tokens)
  *         │     ├── LocalStrategy (email/password validation)
  *         │     ├── JwtStrategy (JWT token validation)
+ *         │     ├── GoogleStrategy (Google OAuth — feature-flagged)
+ *         │     ├── GoogleOAuthGuard (checks feature flag before OAuth)
  *         │     └── RolesGuard (RBAC)
  *         │
  *         ├── controllers:
@@ -48,7 +50,9 @@ import { AuthController } from './auth.controller';
 import { TokenService } from './token.service';
 import { LocalStrategy } from './strategies/local.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
+import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
 @Module({
@@ -82,9 +86,16 @@ import { RolesGuard } from './guards/roles.guard';
     TokenService,
 
     // ─── Passport Strategies ───
-    // These are auto-detected by Passport when registered as providers
+    // These are auto-detected by Passport when registered as providers.
+    // GoogleStrategy is always registered but GoogleOAuthGuard checks the
+    // feature flag — if disabled, the endpoints return 404 before the
+    // strategy is ever invoked.
     LocalStrategy,
     JwtStrategy,
+    GoogleStrategy,
+
+    // ─── Feature-flagged Guards ───
+    GoogleOAuthGuard,
 
     // ─── Global Guards ───
     // APP_GUARD makes these apply to EVERY route automatically.

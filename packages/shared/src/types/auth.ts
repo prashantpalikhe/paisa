@@ -61,3 +61,23 @@ export interface ChangePasswordRequest {
   currentPassword: string;
   newPassword: string;
 }
+
+// ─── OAuth ───
+
+/** Supported OAuth providers. Extend this as new providers are added. */
+export type OAuthProvider = 'google';
+
+/**
+ * Data extracted from an OAuth provider during the callback.
+ * Used by UserService.findOrCreateOAuthUser() to create or link accounts.
+ */
+export interface OAuthProfile {
+  provider: OAuthProvider;
+  providerUserId: string;
+  email: string;
+  name?: string;
+  avatarUrl?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  expiresAt?: Date;
+}

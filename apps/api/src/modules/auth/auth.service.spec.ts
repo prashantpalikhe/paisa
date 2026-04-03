@@ -270,4 +270,90 @@ describe('AuthService', () => {
     // Should NOT update the password
     expect(mockUserService.updatePassword).not.toHaveBeenCalled();
   });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // OAUTH LOGIN
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  const oauthProfile = {
+    provider: 'google' as const,
+    providerUserId: 'google-123',
+    email: 'oauth@example.com',
+    name: 'OAuth User',
+    avatarUrl: 'https://example.com/photo.jpg',
+  };
+
+  it('should handle new OAuth user registration', async () => {
+    const newUser = {
+      id: 'user-2',
+      email: 'oauth@example.com',
+      name: 'OAuth User',
+      banned: false,
+    };
+    mockUserService.findOrCreateOAuthUser = vi.fn().mockResolvedValue({
+      user: newUser,
+      isNewUser: true,
+    });
+
+    const result = await service.handleOAuthLogin(oauthProfile);
+
+    expect(result.user).toEqual(newUser);
+    expect(result.tokenPair.accessToken).toBe('mock-access-token');
+    expect(result.tokenPair.refreshToken).toBe('mock-refresh-token');
+    expect(result.isNewUser).toBe(true);
+
+    // Should emit user.registered event (not user.logged_in)
+    expect(mockEventBus.emit).toHaveBeenCalledWith(
+      'user.registered',
+      expect.objectContaining({
+        userId: 'user-2',
+        oauthProvider: 'google',
+      }),
+    );
+  });
+
+  it('should handle returning OAuth user login', async () => {
+    const existingUser = {
+      id: 'user-1',
+      email: 'oauth@example.com',
+      name: 'OAuth User',
+      banned: false,
+    };
+    mockUserService.findOrCreateOAuthUser = vi.fn().mockResolvedValue({
+      user: existingUser,
+      isNewUser: false,
+    });
+
+    const result = await service.handleOAuthLogin(oauthProfile);
+
+    expect(result.isNewUser).toBe(false);
+
+    // Should emit user.logged_in event (not user.registered)
+    expect(mockEventBus.emit).toHaveBeenCalledWith(
+      'user.logged_in',
+      expect.objectContaining({
+        userId: 'user-1',
+        oauthProvider: 'google',
+      }),
+    );
+  });
+
+  it('should reject banned OAuth user', async () => {
+    const bannedUser = {
+      id: 'user-1',
+      email: 'banned@example.com',
+      banned: true,
+    };
+    mockUserService.findOrCreateOAuthUser = vi.fn().mockResolvedValue({
+      user: bannedUser,
+      isNewUser: false,
+    });
+
+    await expect(
+      service.handleOAuthLogin(oauthProfile),
+    ).rejects.toThrow(UnauthorizedException);
+
+    // Should NOT generate tokens
+    expect(mockTokenService.generateAccessToken).not.toHaveBeenCalled();
+  });
 });
