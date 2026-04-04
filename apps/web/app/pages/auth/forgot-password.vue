@@ -1,5 +1,5 @@
 <!--
-  Forgot Password Page
+  Forgot Password Page — Stripe-inspired design
 
   Sends a password reset email. Uses the shared forgotPasswordSchema.
 
@@ -8,9 +8,9 @@
   shown to the user.
 -->
 <template>
-  <Card>
-    <CardHeader class="text-center">
-      <CardTitle class="text-lg">Reset your password</CardTitle>
+  <Card class="border-0 shadow-lg">
+    <CardHeader class="pb-4 text-center">
+      <CardTitle class="text-xl">Reset your password</CardTitle>
       <CardDescription>
         Enter your email and we'll send you a reset link.
       </CardDescription>
@@ -36,17 +36,13 @@
       <form v-else class="space-y-4" novalidate @submit.prevent="onSubmit">
         <div class="space-y-2">
           <Label for="email">Email</Label>
-          <div class="relative">
-            <Mail class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="email"
-              v-model="formState.email"
-              type="email"
-              placeholder="you@example.com"
-              class="pl-9"
-              autofocus
-            />
-          </div>
+          <Input
+            id="email"
+            v-model="formState.email"
+            type="email"
+            placeholder="you@example.com"
+            autofocus
+          />
           <p v-if="errors.email" class="text-sm text-destructive">
             {{ errors.email }}
           </p>
@@ -65,10 +61,10 @@
         </Button>
       </form>
     </CardContent>
-    <CardFooter class="justify-center">
+    <CardFooter class="justify-center border-t bg-muted/30 py-4">
       <p class="text-sm text-muted-foreground">
         Remember your password?
-        <NuxtLink to="/auth/login" class="text-primary hover:underline">
+        <NuxtLink to="/auth/login" class="font-medium text-primary hover:underline">
           Sign in
         </NuxtLink>
       </p>
@@ -77,7 +73,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, CheckCircle, Loader2, Mail } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next'
 import { forgotPasswordSchema } from '@paisa/shared'
 
 definePageMeta({

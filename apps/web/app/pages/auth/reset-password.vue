@@ -8,9 +8,9 @@
   the new password to the API.
 -->
 <template>
-  <Card>
-    <CardHeader class="text-center">
-      <CardTitle class="text-lg">Set a new password</CardTitle>
+  <Card class="border-0 shadow-lg">
+    <CardHeader class="pb-4 text-center">
+      <CardTitle class="text-xl">Set a new password</CardTitle>
     </CardHeader>
     <CardContent class="space-y-4">
       <!-- Missing token error -->
@@ -42,17 +42,13 @@
       <form v-else class="space-y-4" novalidate @submit.prevent="onSubmit">
         <div class="space-y-2">
           <Label for="password">New password</Label>
-          <div class="relative">
-            <Lock class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="password"
-              v-model="formState.password"
-              type="password"
-              placeholder="••••••••"
-              class="pl-9"
-              autofocus
-            />
-          </div>
+          <Input
+            id="password"
+            v-model="formState.password"
+            type="password"
+            placeholder="••••••••"
+            autofocus
+          />
           <p v-if="errors.password" class="text-sm text-destructive">
             {{ errors.password }}
           </p>
@@ -73,9 +69,9 @@
         </Button>
       </form>
     </CardContent>
-    <CardFooter class="justify-center">
+    <CardFooter class="justify-center border-t bg-muted/30 py-4">
       <p class="text-sm text-muted-foreground">
-        <NuxtLink to="/auth/login" class="text-primary hover:underline">
+        <NuxtLink to="/auth/login" class="font-medium text-primary hover:underline">
           Back to sign in
         </NuxtLink>
       </p>
@@ -84,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, CheckCircle, Loader2, Lock } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next'
 import { passwordSchema } from '@paisa/shared'
 import { z } from 'zod'
 

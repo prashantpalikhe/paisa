@@ -8,9 +8,9 @@
   Shows a loading spinner, then success or error.
 -->
 <template>
-  <Card>
-    <CardHeader class="text-center">
-      <CardTitle class="text-lg">Email Verification</CardTitle>
+  <Card class="border-0 shadow-lg">
+    <CardHeader class="pb-4 text-center">
+      <CardTitle class="text-xl">Email Verification</CardTitle>
     </CardHeader>
     <CardContent>
       <!-- Loading state — auto-verifying -->

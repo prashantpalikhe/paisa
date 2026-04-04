@@ -56,7 +56,7 @@ describe('StripePortalService', () => {
     expect(result.url).toBe('https://billing.stripe.com/session');
     expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith({
       customer: 'cus_123',
-      return_url: 'http://localhost:3000/billing',
+      return_url: 'http://localhost:3000/settings/billing',
     });
   });
 

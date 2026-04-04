@@ -64,7 +64,7 @@ export class StripePortalService {
 
     const session = await this.stripe.billingPortal.sessions.create({
       customer: stripeCustomerId,
-      return_url: `${frontendUrl}/billing`,
+      return_url: `${frontendUrl}/settings/billing`,
     });
 
     this.logger.log(`Portal session created for user ${userId}`);

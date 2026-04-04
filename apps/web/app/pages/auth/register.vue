@@ -1,34 +1,31 @@
 <!--
-  Register Page
+  Register Page — Stripe-inspired design
 
-  Uses the shared registerSchema for validation.
-  Password requirements are enforced by the same schema on frontend AND backend:
-  - At least 8 characters
-  - At least one lowercase, one uppercase, one number
+  Clean card matching the login page style.
+  Password requirements enforced by the same schema on frontend AND backend.
 
-  Layout: 'auth' (centered card)
+  Layout: 'auth' (centered card with gradient background)
   Middleware: 'guest' (redirect if already logged in)
 -->
 <template>
-  <Card>
-    <CardHeader class="text-center">
-      <CardTitle class="text-lg">Create your account</CardTitle>
+  <Card class="border-0 shadow-lg">
+    <CardHeader class="pb-4 text-center">
+      <CardTitle class="text-xl">Create your account</CardTitle>
+      <CardDescription>
+        Get started with Paisa today
+      </CardDescription>
     </CardHeader>
     <CardContent class="space-y-4">
       <!-- Register Form -->
       <form class="space-y-4" novalidate @submit.prevent="onSubmit">
         <div class="space-y-2">
           <Label for="name">Name</Label>
-          <div class="relative">
-            <UserIcon class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="name"
-              v-model="formState.name"
-              placeholder="Jane Doe"
-              class="pl-9"
-              autofocus
-            />
-          </div>
+          <Input
+            id="name"
+            v-model="formState.name"
+            placeholder="Jane Doe"
+            autofocus
+          />
           <p v-if="errors.name" class="text-sm text-destructive">
             {{ errors.name }}
           </p>
@@ -36,16 +33,12 @@
 
         <div class="space-y-2">
           <Label for="email">Email</Label>
-          <div class="relative">
-            <Mail class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="email"
-              v-model="formState.email"
-              type="email"
-              placeholder="you@example.com"
-              class="pl-9"
-            />
-          </div>
+          <Input
+            id="email"
+            v-model="formState.email"
+            type="email"
+            placeholder="you@example.com"
+          />
           <p v-if="errors.email" class="text-sm text-destructive">
             {{ errors.email }}
           </p>
@@ -53,16 +46,12 @@
 
         <div class="space-y-2">
           <Label for="password">Password</Label>
-          <div class="relative">
-            <Lock class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="password"
-              v-model="formState.password"
-              type="password"
-              placeholder="••••••••"
-              class="pl-9"
-            />
-          </div>
+          <Input
+            id="password"
+            v-model="formState.password"
+            type="password"
+            placeholder="••••••••"
+          />
           <p v-if="errors.password" class="text-sm text-destructive">
             {{ errors.password }}
           </p>
@@ -101,10 +90,10 @@
         </Button>
       </template>
     </CardContent>
-    <CardFooter class="justify-center">
+    <CardFooter class="justify-center border-t bg-muted/30 py-4">
       <p class="text-sm text-muted-foreground">
         Already have an account?
-        <NuxtLink to="/auth/login" class="text-primary hover:underline">
+        <NuxtLink to="/auth/login" class="font-medium text-primary hover:underline">
           Sign in
         </NuxtLink>
       </p>
@@ -113,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, Loader2, Lock, Mail, User as UserIcon } from 'lucide-vue-next'
+import { AlertCircle, Loader2 } from 'lucide-vue-next'
 import { registerSchema } from '@paisa/shared'
 
 definePageMeta({

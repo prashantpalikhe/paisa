@@ -10,7 +10,7 @@
  * ```
  *
  * The frontend redirects to the returned URL.
- * When the customer is done, Stripe redirects them back to /billing.
+ * When the customer is done, Stripe redirects them back to /settings/billing.
  */
 import {
   Controller,
