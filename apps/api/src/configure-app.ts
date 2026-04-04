@@ -60,6 +60,27 @@ export function configureApp(app: INestApplication): void {
   );
   app.use(cookieParser());
 
+  // ─── Raw body for Stripe webhooks ───
+  // Stripe webhook signature verification requires the raw (unparsed) request
+  // body. Express's JSON middleware parses it before controllers receive it,
+  // destroying the original bytes. This middleware captures the raw body as a
+  // Buffer and attaches it to `req.rawBody` for the webhook controller to use.
+  //
+  // Only applies to POST /stripe/webhooks — all other routes use normal JSON parsing.
+  app.use(
+    '/stripe/webhooks',
+    express.raw({ type: 'application/json' }),
+    (req: any, _res: any, next: any) => {
+      // express.raw() parses the body into req.body as a Buffer.
+      // We move it to req.rawBody so the webhook controller can access it,
+      // then NestJS's built-in JSON parsing handles req.body normally.
+      if (Buffer.isBuffer(req.body)) {
+        req.rawBody = req.body;
+      }
+      next();
+    },
+  );
+
   // ─── CORS ───
   app.enableCors({
     origin: config.corsOrigins,

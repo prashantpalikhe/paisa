@@ -36,6 +36,7 @@ model User {
   refreshTokens  RefreshToken[]
   stripeCustomer StripeCustomer?
   subscriptions  Subscription[]
+  payments       Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -140,13 +141,14 @@ model StripeCustomer {
 }
 
 model Product {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
-  active      Boolean @default(true)
-  metadata    Json? // arbitrary key-value pairs
-  plans       Plan[]
-  sortOrder   Int     @default(0)
+  id               String  @id @default(cuid())
+  name             String
+  description      String?
+  active           Boolean @default(true)
+  metadata         Json? // arbitrary key-value pairs
+  stripeProductId  String? @unique // Stripe product ID (prod_xxx)
+  plans            Plan[]
+  sortOrder        Int     @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -169,6 +171,7 @@ model Plan {
   sortOrder     Int     @default(0)
 
   subscriptions Subscription[]
+  payments      Payment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -205,6 +208,28 @@ enum SubscriptionStatus {
   INCOMPLETE
   INCOMPLETE_EXPIRED
   PAUSED
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  userId                String
+  user                  User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId                String
+  plan                  Plan          @relation(fields: [planId], references: [id])
+  stripePaymentIntentId String        @unique
+  amountInCents         Int
+  currency              String        @default("usd")
+  status                PaymentStatus
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+enum PaymentStatus {
+  SUCCEEDED
+  FAILED
+  REFUNDED
 }
 
 // ──────────────────────────────────────

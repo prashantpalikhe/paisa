@@ -43,6 +43,8 @@ export type {
   PlanInterval,
   Subscription,
   SubscriptionStatus,
+  Payment,
+  PaymentStatus,
 } from './types/billing';
 
 // Constants

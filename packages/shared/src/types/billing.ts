@@ -47,3 +47,16 @@ export type SubscriptionStatus =
   | 'INCOMPLETE'
   | 'INCOMPLETE_EXPIRED'
   | 'PAUSED';
+
+export interface Payment {
+  id: string;
+  userId: string;
+  planId: string;
+  plan: Plan;
+  amountInCents: number;
+  currency: string;
+  status: PaymentStatus;
+  createdAt: string;
+}
+
+export type PaymentStatus = 'SUCCEEDED' | 'FAILED' | 'REFUNDED';

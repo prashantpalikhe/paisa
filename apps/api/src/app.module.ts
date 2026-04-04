@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { EmailModule } from './modules/email/email.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { StripeModule } from './modules/stripe/stripe.module';
 import { TestModule } from './test/test.module';
 
 /**
@@ -42,7 +43,7 @@ import { TestModule } from './test/test.module';
 const features = parseFeatures(process.env);
 
 const optionalModules = [
-  // features.stripe.enabled    && StripeModule.register(),
+  features.stripe.enabled && StripeModule.register(),
   // features.redis.enabled     && CacheModule.register(),
   // features.rabbitmq.enabled  && QueueModule.register(),
   // features.websockets.enabled && WebsocketModule.register(),
