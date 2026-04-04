@@ -22,3 +22,13 @@ export {
   type CreateProductOptions,
   type CreatePlanOptions,
 } from './product.factory';
+
+export {
+  createSubscription,
+  createPayment,
+  createStripeCustomer,
+  resetStripeCounters,
+  type CreateSubscriptionOptions,
+  type CreatePaymentOptions,
+  type CreateStripeCustomerOptions,
+} from './stripe.factory';

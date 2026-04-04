@@ -31,16 +31,35 @@
  * ```
  */
 import { INestApplication } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test, TestingModule, TestingModuleBuilder } from '@nestjs/testing';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/configure-app';
 
-export async function createTestApp(): Promise<INestApplication> {
+/**
+ * Options for customizing the test app.
+ *
+ * `customize` receives the TestingModuleBuilder before compilation.
+ * Use it to override providers (e.g., replacing the Stripe SDK with a mock).
+ */
+export interface CreateTestAppOptions {
+  customize?: (builder: TestingModuleBuilder) => TestingModuleBuilder;
+}
+
+export async function createTestApp(
+  options?: CreateTestAppOptions,
+): Promise<INestApplication> {
   // ── 1. Compile the full AppModule with all real providers ──
   // No mocks — that's what makes this an e2e test.
-  const moduleFixture: TestingModule = await Test.createTestingModule({
+  // Optional: use `customize` to override specific providers (e.g., Stripe mock).
+  let builder: TestingModuleBuilder = Test.createTestingModule({
     imports: [AppModule],
-  }).compile();
+  });
+
+  if (options?.customize) {
+    builder = options.customize(builder);
+  }
+
+  const moduleFixture: TestingModule = await builder.compile();
 
   // ── 2. Create the HTTP application ──
   const app = moduleFixture.createNestApplication();

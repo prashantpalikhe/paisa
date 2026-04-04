@@ -35,6 +35,7 @@ export type {
   Product,
   Plan,
   Subscription,
+  Payment,
   FeatureFlag,
   AuditLog,
 } from './generated/prisma/client';

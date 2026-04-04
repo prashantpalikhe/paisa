@@ -25,14 +25,23 @@
 </template>
 
 <script setup lang="ts">
-import { User, Shield } from 'lucide-vue-next'
+import { CreditCard, User, Shield } from 'lucide-vue-next'
 
 const route = useRoute()
+const { appConfig } = useFeatureFlags()
 
-const items = [
-  { to: '/settings/profile', label: 'Profile', icon: User },
-  { to: '/settings/security', label: 'Security', icon: Shield },
-]
+const items = computed(() => {
+  const base = [
+    { to: '/settings/profile', label: 'Profile', icon: User },
+    { to: '/settings/security', label: 'Security', icon: Shield },
+  ]
+
+  if (appConfig.value.features.stripe) {
+    base.push({ to: '/settings/billing', label: 'Billing', icon: CreditCard })
+  }
+
+  return base
+})
 
 function isActive(path: string): boolean {
   return route.path === path
