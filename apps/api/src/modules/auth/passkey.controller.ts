@@ -232,6 +232,7 @@ export class PasskeyController {
       role: user.role as 'USER' | 'ADMIN',
       emailVerified: user.emailVerified,
       avatarUrl: user.avatarUrl,
+      hasPassword: !!user.passwordHash,
       has2FA: false,
       hasPasskey: true, // They just logged in with one
     };

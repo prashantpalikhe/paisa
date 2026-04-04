@@ -101,6 +101,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       role: user.role as 'USER' | 'ADMIN',
       emailVerified: user.emailVerified,
       avatarUrl: user.avatarUrl,
+      hasPassword: !!user.passwordHash,
       has2FA: false, // Phase 3
       hasPasskey,
     };

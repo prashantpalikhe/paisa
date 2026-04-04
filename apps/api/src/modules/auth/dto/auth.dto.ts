@@ -85,6 +85,15 @@ export class VerifyEmailDto {
   token!: string;
 }
 
+export class SetPasswordDto {
+  @ApiProperty({
+    example: 'NewPassword123',
+    description: 'Password to set (same requirements as registration)',
+    minLength: 8,
+  })
+  password!: string;
+}
+
 export class ChangePasswordDto {
   @ApiProperty({
     example: 'OldPassword123',
@@ -122,6 +131,9 @@ export class AuthUserDto {
 
   @ApiPropertyOptional({ example: null })
   avatarUrl?: string | null;
+
+  @ApiProperty({ example: true })
+  hasPassword!: boolean;
 
   @ApiProperty({ example: false })
   has2FA!: boolean;

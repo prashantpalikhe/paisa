@@ -356,4 +356,49 @@ describe('AuthService', () => {
     // Should NOT generate tokens
     expect(mockTokenService.generateAccessToken).not.toHaveBeenCalled();
   });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━��━━━━━
+  // SET PASSWORD (OAuth-only users)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  it('should set password for OAuth-only user (no existing password)', async () => {
+    const user = {
+      id: 'user-1',
+      email: 'oauth@example.com',
+      name: 'OAuth User',
+      passwordHash: null, // OAuth-only user
+    };
+    mockUserService.findById.mockResolvedValue(user);
+
+    await service.setPassword('user-1', 'NewPassword123');
+
+    expect(mockUserService.updatePassword).toHaveBeenCalledWith('user-1', 'NewPassword123');
+    expect(mockEventBus.emit).toHaveBeenCalledWith(
+      'user.password_changed',
+      expect.objectContaining({ userId: 'user-1', email: 'oauth@example.com' }),
+    );
+  });
+
+  it('should reject setPassword when user already has a password', async () => {
+    const user = {
+      id: 'user-1',
+      email: 'user@example.com',
+      passwordHash: 'existing-hash',
+    };
+    mockUserService.findById.mockResolvedValue(user);
+
+    await expect(
+      service.setPassword('user-1', 'NewPassword123'),
+    ).rejects.toThrow(ConflictException);
+
+    expect(mockUserService.updatePassword).not.toHaveBeenCalled();
+  });
+
+  it('should reject setPassword when user not found', async () => {
+    mockUserService.findById.mockResolvedValue(null);
+
+    await expect(
+      service.setPassword('nonexistent', 'NewPassword123'),
+    ).rejects.toThrow(UnauthorizedException);
+  });
 });

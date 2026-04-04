@@ -51,6 +51,10 @@ export const changePasswordSchema = z.object({
   newPassword: passwordSchema,
 });
 
+export const setPasswordSchema = z.object({
+  password: passwordSchema,
+});
+
 export const updateProfileSchema = z.object({
   name: z
     .string()

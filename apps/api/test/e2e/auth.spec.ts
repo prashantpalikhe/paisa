@@ -409,6 +409,123 @@ describe('Auth (e2e)', () => {
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SET PASSWORD (OAuth-only users)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  it('POST /auth/set-password → 409 when user already has a password', async () => {
+    const regRes = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email: 'haspass@example.com', password: 'Password123' })
+      .expect(201);
+
+    const token = regRes.body.data.accessToken;
+
+    const res = await request(app.getHttpServer())
+      .post('/auth/set-password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ password: 'NewPassword123' })
+      .expect(409);
+
+    expect(res.body.error.code).toBe('CONFLICT');
+  });
+
+  it('POST /auth/set-password → 200 for OAuth-only user', async () => {
+    // Register normally, then remove password to simulate OAuth-only
+    const regRes = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email: 'setpass@example.com', password: 'Password123' })
+      .expect(201);
+
+    const token = regRes.body.data.accessToken;
+    const userId = regRes.body.data.user.id;
+
+    // Simulate OAuth-only by removing the password hash
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: null },
+    });
+
+    // Now set-password should work
+    const res = await request(app.getHttpServer())
+      .post('/auth/set-password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ password: 'NewPassword123' })
+      .expect(200);
+
+    expect(res.body.data.message).toBe('Password set successfully.');
+
+    // Verify we can now login with the new password
+    await request(app.getHttpServer())
+      .post('/auth/login')
+      .send({ email: 'setpass@example.com', password: 'NewPassword123' })
+      .expect(200);
+  });
+
+  it('POST /auth/set-password → 400 for weak password', async () => {
+    const regRes = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email: 'weak@example.com', password: 'Password123' })
+      .expect(201);
+
+    const token = regRes.body.data.accessToken;
+    const userId = regRes.body.data.user.id;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: null },
+    });
+
+    await request(app.getHttpServer())
+      .post('/auth/set-password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ password: 'weak' })
+      .expect(400);
+  });
+
+  it('POST /auth/set-password → 401 without auth', async () => {
+    await request(app.getHttpServer())
+      .post('/auth/set-password')
+      .send({ password: 'Password123' })
+      .expect(401);
+  });
+
+  it('GET /auth/me → hasPassword true for email/password user', async () => {
+    const regRes = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email: 'check@example.com', password: 'Password123' })
+      .expect(201);
+
+    const res = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${regRes.body.data.accessToken}`)
+      .expect(200);
+
+    expect(res.body.data.hasPassword).toBe(true);
+  });
+
+  it('GET /auth/me → hasPassword false for OAuth-only user', async () => {
+    const regRes = await request(app.getHttpServer())
+      .post('/auth/register')
+      .send({ email: 'nopw@example.com', password: 'Password123' })
+      .expect(201);
+
+    const token = regRes.body.data.accessToken;
+    const userId = regRes.body.data.user.id;
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: null },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/auth/me')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+
+    expect(res.body.data.hasPassword).toBe(false);
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // GOOGLE OAUTH (feature-flagged)
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // The full OAuth redirect flow can't be tested without a real Google

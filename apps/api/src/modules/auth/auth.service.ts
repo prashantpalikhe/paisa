@@ -445,6 +445,44 @@ export class AuthService {
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // SET PASSWORD (OAuth-only users)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /**
+   * Set a password for an OAuth-only user who doesn't have one yet.
+   *
+   * This is for users who signed up via Google OAuth and have
+   * `passwordHash: null`. They're already authenticated (JWT guard),
+   * so no current password is needed — they proved identity via OAuth.
+   *
+   * Guards:
+   * - User must exist
+   * - User must NOT have a password already (use changePassword for that)
+   */
+  async setPassword(userId: string, password: string): Promise<void> {
+    const user = await this.userService.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    if (user.passwordHash) {
+      throw new ConflictException(
+        'You already have a password. Use change password instead.',
+      );
+    }
+
+    await this.userService.updatePassword(userId, password);
+
+    this.eventBus.emit(DOMAIN_EVENTS.USER_PASSWORD_CHANGED, {
+      userId,
+      email: user.email,
+      name: user.name,
+    });
+
+    this.logger.log(`Password set for OAuth user: ${userId}`);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // OAUTH LOGIN
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

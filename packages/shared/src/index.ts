@@ -66,6 +66,7 @@ export {
   resetPasswordSchema,
   verifyEmailSchema,
   changePasswordSchema,
+  setPasswordSchema,
   updateProfileSchema,
   deleteAccountSchema,
   twoFactorVerifySchema,

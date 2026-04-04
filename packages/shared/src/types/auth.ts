@@ -9,6 +9,7 @@ export interface AuthUser {
   role: UserRole;
   emailVerified: boolean;
   avatarUrl: string | null;
+  hasPassword: boolean;
   has2FA: boolean;
   hasPasskey: boolean;
 }

@@ -61,6 +61,7 @@ import {
   resetPasswordSchema,
   verifyEmailSchema,
   changePasswordSchema,
+  setPasswordSchema,
 } from '@paisa/shared';
 import { Public } from '../../common/decorators/public.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
@@ -76,6 +77,7 @@ import {
   ForgotPasswordDto,
   ResetPasswordDto,
   VerifyEmailDto,
+  SetPasswordDto,
   ChangePasswordDto,
   AuthTokenResponseDto,
   AuthUserDto,
@@ -421,6 +423,28 @@ export class AuthController {
   }
 
   /**
+   * Set a password for OAuth-only accounts (no existing password).
+   *
+   * Only works when the user has no password (passwordHash is null).
+   * This lets Google OAuth users add email/password as a login method.
+   */
+  @Post('set-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Set password for OAuth-only account' })
+  @ApiBody({ type: SetPasswordDto })
+  @ApiResponse({ status: 200, description: 'Password set', type: MessageResponseDto })
+  @ApiResponse({ status: 409, description: 'User already has a password' })
+  async setPassword(
+    @CurrentUser() user: AuthUser,
+    @Body(new ZodValidationPipe(setPasswordSchema))
+    body: { password: string },
+  ) {
+    await this.authService.setPassword(user.id, body.password);
+    return { message: 'Password set successfully.' };
+  }
+
+  /**
    * Resend email verification.
    */
   @Post('resend-verification')
@@ -472,6 +496,7 @@ export class AuthController {
       role: user.role as 'USER' | 'ADMIN',
       emailVerified: user.emailVerified,
       avatarUrl: user.avatarUrl,
+      hasPassword: !!user.passwordHash,
       has2FA: false, // Phase 3
       hasPasskey,
     };

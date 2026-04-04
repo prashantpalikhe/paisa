@@ -22,8 +22,52 @@
       </aside>
 
       <div class="flex-1 space-y-6">
-        <!-- Change Password -->
-        <Card>
+        <!-- Set Password (OAuth-only users who have no password) -->
+        <Card v-if="!user?.hasPassword">
+          <CardHeader>
+            <CardTitle>Set a password</CardTitle>
+            <CardDescription>
+              You signed in with a social account. Add a password so you can
+              also sign in with email and password.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form class="space-y-4" novalidate @submit.prevent="onSetPassword">
+              <div class="space-y-2">
+                <Label for="setPassword">Password</Label>
+                <Input
+                  id="setPassword"
+                  v-model="setPasswordForm.password"
+                  type="password"
+                  placeholder="Enter a password"
+                />
+                <p v-if="setPasswordErrors.password" class="text-sm text-destructive">
+                  {{ setPasswordErrors.password }}
+                </p>
+                <p class="text-xs text-muted-foreground">
+                  At least 8 characters with uppercase, lowercase, and a number.
+                </p>
+              </div>
+
+              <Alert v-if="passwordSuccess" class="border-primary/20 bg-primary/5">
+                <CheckCircle class="h-4 w-4 text-primary" />
+                <AlertDescription>{{ passwordSuccess }}</AlertDescription>
+              </Alert>
+              <Alert v-if="passwordError" variant="destructive">
+                <AlertCircle class="h-4 w-4" />
+                <AlertDescription>{{ passwordError }}</AlertDescription>
+              </Alert>
+
+              <Button type="submit" :disabled="passwordSubmitting">
+                <Loader2 v-if="passwordSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                Set password
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <!-- Change Password (users who already have a password) -->
+        <Card v-else>
           <CardHeader>
             <CardTitle>Change password</CardTitle>
             <CardDescription>
@@ -281,7 +325,7 @@
 
 <script setup lang="ts">
 import { AlertCircle, CheckCircle, KeyRound, Loader2 } from 'lucide-vue-next'
-import { changePasswordSchema, deleteAccountSchema } from '@paisa/shared'
+import { changePasswordSchema, setPasswordSchema, deleteAccountSchema } from '@paisa/shared'
 
 definePageMeta({
   middleware: 'auth',
@@ -289,9 +333,60 @@ definePageMeta({
 
 useHead({ title: 'Security Settings' })
 
-const { apiFetch, clearAuth } = useAuth()
+const { user, apiFetch, clearAuth, fetchUser } = useAuth()
 const { appConfig } = useFeatureFlags()
 const { registerPasskey, listPasskeys: fetchPasskeys, renamePasskey, deletePasskey } = usePasskey()
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Set Password (OAuth-only users)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const setPasswordForm = reactive({ password: '' })
+const setPasswordErrors = reactive<Record<string, string>>({})
+
+function validateSetPassword(): boolean {
+  Object.keys(setPasswordErrors).forEach(key => delete setPasswordErrors[key])
+
+  const result = setPasswordSchema.safeParse(setPasswordForm)
+  if (!result.success) {
+    for (const issue of result.error.issues) {
+      const field = issue.path[0] as string
+      if (!setPasswordErrors[field]) {
+        setPasswordErrors[field] = issue.message
+      }
+    }
+    return false
+  }
+  return true
+}
+
+async function onSetPassword() {
+  if (!validateSetPassword()) return
+
+  passwordSubmitting.value = true
+  passwordError.value = ''
+  passwordSuccess.value = ''
+
+  try {
+    await apiFetch('/auth/set-password', {
+      method: 'POST',
+      body: JSON.stringify(setPasswordForm),
+      headers: { 'Content-Type': 'application/json' },
+    })
+
+    passwordSuccess.value = 'Password set successfully. You can now sign in with email and password.'
+    setPasswordForm.password = ''
+    // Refresh user so hasPassword updates and the UI switches to "Change password"
+    await fetchUser()
+  } catch (error: any) {
+    passwordError.value =
+      error?.data?.error?.message
+      || error?.message
+      || 'Failed to set password.'
+  } finally {
+    passwordSubmitting.value = false
+  }
+}
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Change Password
