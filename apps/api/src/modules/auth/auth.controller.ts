@@ -195,6 +195,7 @@ export class AuthController {
    * The browser sends the cookie automatically — no JavaScript involved.
    */
   @Public()
+  @StrictThrottle()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh access token using refresh cookie' })
@@ -265,6 +266,7 @@ export class AuthController {
    * Verify email address using the token from the verification email.
    */
   @Public()
+  @StrictThrottle()
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email with token from verification email' })

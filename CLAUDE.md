@@ -273,10 +273,10 @@ API docs title, email templates, and frontend theme all read from this config.
 
 ### Rate Limiting
 - Global rate limiting via `@nestjs/throttler` with two tiers:
-  - **Default** (all endpoints): 60 requests per 60 seconds per IP
-  - **Strict** (auth-sensitive): 5 requests per 60 seconds per IP
+  - **Default** (all endpoints): 100 requests per 60 seconds per IP
+  - **Strict** (auth-sensitive): 10 requests per 60 seconds per IP
 - `ThrottleModule` in `src/core/throttle/` registers `ThrottlerGuard` as a global `APP_GUARD`.
-- `@StrictThrottle()` decorator applied to: login, register, forgot-password, reset-password, resend-verification, passkey login options/verify.
+- `@StrictThrottle()` decorator applied to: login, register, refresh, forgot-password, reset-password, verify-email, resend-verification, passkey login options/verify.
 - `@SkipThrottle()` applied to Stripe webhooks (requests from Stripe servers, not users).
 - Storage: In-memory by default. Switch to `ThrottlerStorageRedisService` when Redis is enabled.
 
@@ -329,4 +329,4 @@ API docs title, email templates, and frontend theme all read from this config.
 - **Raw body for webhooks**: Express JSON middleware destroys raw bytes needed for Stripe signature verification. Custom middleware in `configure-app.ts` captures Buffer to `req.rawBody` before JSON parsing.
 - **Webhook idempotency**: All Stripe webhook handlers use Prisma `upsert` — safe against Stripe retries.
 - **E2e Stripe module loading**: `AppModule` evaluates `parseFeatures(process.env)` at import time. `.env.test` must set `FEATURE_STRIPE_ENABLED=true` so the module loads. Provider override via `createTestApp({ customize })` replaces the SDK with a mock.
-- **Rate limiting in e2e tests**: ThrottlerGuard uses in-memory counters. E2e tests that send many requests to strict endpoints may hit the 5/min limit. Consider `@SkipThrottle()` or higher limits in test env if needed.
+- **Rate limiting is in-memory**: ThrottlerGuard counters are per-instance. Multi-instance deployments need Redis-backed storage (`ThrottlerStorageRedisService`) or attackers can multiply limits by instance count. Test env uses 1000 req/min to avoid interfering with e2e suites.
