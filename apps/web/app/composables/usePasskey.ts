@@ -55,8 +55,7 @@ export function usePasskey() {
     // Step 3: Send the credential to the API for verification
     const result = await apiFetch<PasskeyInfo>('/auth/passkey/register/verify', {
       method: 'POST',
-      body: JSON.stringify({ response: credential, deviceName }),
-      headers: { 'Content-Type': 'application/json' },
+      body: { response: credential, deviceName },
     })
 
     // Refresh user data so `hasPasskey` updates
@@ -86,7 +85,7 @@ export function usePasskey() {
     const result = await $fetch<{ data: { accessToken: string; expiresIn: number; user: AuthUser } }>('/auth/passkey/login/verify', {
       baseURL: apiBase,
       method: 'POST',
-      body: { response: credential, challenge: optionsData.challenge },
+      body: { response: credential, sessionId: optionsData.sessionId },
       credentials: 'include', // For the refresh cookie
     })
 
@@ -108,8 +107,7 @@ export function usePasskey() {
   async function renamePasskey(passkeyId: string, deviceName: string): Promise<void> {
     await apiFetch(`/auth/passkey/${passkeyId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ deviceName }),
-      headers: { 'Content-Type': 'application/json' },
+      body: { deviceName },
     })
   }
 

@@ -370,8 +370,7 @@ async function onSetPassword() {
   try {
     await apiFetch('/auth/set-password', {
       method: 'POST',
-      body: JSON.stringify(setPasswordForm),
-      headers: { 'Content-Type': 'application/json' },
+      body: { password: setPasswordForm.password },
     })
 
     passwordSuccess.value = 'Password set successfully. You can now sign in with email and password.'
@@ -428,8 +427,7 @@ async function onChangePassword() {
   try {
     await apiFetch('/auth/change-password', {
       method: 'POST',
-      body: JSON.stringify(passwordForm),
-      headers: { 'Content-Type': 'application/json' },
+      body: { currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword },
     })
 
     passwordSuccess.value = 'Password changed successfully.'
@@ -448,12 +446,6 @@ async function onChangePassword() {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Passkeys
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-interface PasskeyInfo {
-  id: string
-  deviceName: string | null
-  createdAt: string
-}
 
 const passkeys = ref<PasskeyInfo[]>([])
 const passkeyRegistering = ref(false)
@@ -574,8 +566,7 @@ async function onDeleteAccount() {
   try {
     await apiFetch('/users/me', {
       method: 'DELETE',
-      body: JSON.stringify(deleteForm),
-      headers: { 'Content-Type': 'application/json' },
+      body: { password: deleteForm.password },
     })
 
     // Account is gone — clear auth state and redirect to home

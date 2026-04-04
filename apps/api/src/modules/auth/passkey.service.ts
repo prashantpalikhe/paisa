@@ -33,6 +33,8 @@ import {
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
+  OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import {
   generateRegistrationOptions,
@@ -45,6 +47,7 @@ import type {
   AuthenticationResponseJSON,
   AuthenticatorTransportFuture,
 } from '@simplewebauthn/server';
+import { randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../core/database/database.service';
 import { AppConfigService } from '../../core/config/config.service';
 
@@ -60,12 +63,18 @@ interface StoredChallenge {
   expiresAt: Date;
 }
 
+/** Maximum number of pending challenges to prevent memory exhaustion */
+const MAX_CHALLENGES = 10_000;
+
 @Injectable()
-export class PasskeyService {
+export class PasskeyService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PasskeyService.name);
 
   /** In-memory challenge store. Replaced by Redis in Phase 8. */
   private readonly challengeStore = new Map<string, StoredChallenge>();
+
+  /** Periodic cleanup interval for expired challenges */
+  private cleanupInterval?: ReturnType<typeof setInterval>;
 
   /** WebAuthn Relying Party config — read from env vars */
   private readonly rpName: string;
@@ -79,6 +88,20 @@ export class PasskeyService {
     this.rpName = config.env.WEBAUTHN_RP_NAME;
     this.rpId = config.env.WEBAUTHN_RP_ID;
     this.origin = config.env.WEBAUTHN_ORIGIN;
+  }
+
+  onModuleInit() {
+    // Sweep expired challenges every 60 seconds
+    this.cleanupInterval = setInterval(() => {
+      const now = new Date();
+      for (const [key, stored] of this.challengeStore) {
+        if (stored.expiresAt < now) this.challengeStore.delete(key);
+      }
+    }, 60_000);
+  }
+
+  onModuleDestroy() {
+    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -207,10 +230,14 @@ export class PasskeyService {
       timeout: 60_000,
     });
 
-    // Store challenge keyed by the challenge itself (we don't know the user yet)
-    this.storeChallenge(`auth:${options.challenge}`, options.challenge);
+    // Generate an opaque session ID to key the challenge.
+    // The frontend sends this ID back during verification so we can
+    // look up the expected challenge. The ID itself is not a secret —
+    // security comes from the authenticator's private key signature.
+    const sessionId = randomBytes(16).toString('hex');
+    this.storeChallenge(`auth:${sessionId}`, options.challenge);
 
-    return options;
+    return { ...options, sessionId };
   }
 
   /**
@@ -219,16 +246,14 @@ export class PasskeyService {
    * The authenticator signed the challenge with the private key.
    * We look up the credential in our DB and verify using the stored public key.
    *
-   * The `challengeKey` is the original challenge string returned in Step 1.
-   * The frontend must send it back so we can look up the stored challenge.
-   * This is NOT a security risk — the challenge is a random nonce, not a secret.
-   * The actual security comes from the authenticator's private key signature.
+   * The `sessionId` is the opaque ID returned alongside the options in Step 1.
+   * The frontend sends it back so we can look up the expected challenge.
    *
    * @returns The authenticated user from the database
    */
   async verifyAuthentication(
     response: AuthenticationResponseJSON,
-    challengeKey: string,
+    sessionId: string,
   ) {
     // Find the passkey by credential ID
     const passkey = await this.db.passkey.findUnique({
@@ -247,8 +272,8 @@ export class PasskeyService {
       );
     }
 
-    // Consume the stored challenge
-    const expectedChallenge = this.consumeChallenge(`auth:${challengeKey}`);
+    // Consume the stored challenge using the opaque session ID
+    const expectedChallenge = this.consumeChallenge(`auth:${sessionId}`);
 
     const verification = await verifyAuthenticationResponse({
       response,
@@ -339,6 +364,17 @@ export class PasskeyService {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   private storeChallenge(key: string, challenge: string): void {
+    // Prevent memory exhaustion from abuse of public endpoints
+    if (this.challengeStore.size >= MAX_CHALLENGES) {
+      // Evict oldest entries first
+      const iterator = this.challengeStore.keys();
+      for (let i = 0; i < 100; i++) {
+        const oldest = iterator.next();
+        if (oldest.done) break;
+        this.challengeStore.delete(oldest.value);
+      }
+    }
+
     this.challengeStore.set(key, {
       challenge,
       expiresAt: new Date(Date.now() + 60_000), // 60 seconds

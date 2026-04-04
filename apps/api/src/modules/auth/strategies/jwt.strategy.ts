@@ -47,7 +47,6 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { AppConfigService } from '../../../core/config/config.service';
 import { UserService } from '../../user/user.service';
-import { PasskeyService } from '../passkey.service';
 import type { JwtPayload } from '../token.service';
 import type { AuthUser } from '@paisa/shared';
 
@@ -56,7 +55,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     config: AppConfigService,
     private readonly userService: UserService,
-    private readonly passkeyService: PasskeyService,
   ) {
     super({
       // Extract the JWT from the Authorization header: "Bearer <token>"
@@ -89,11 +87,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('Your account has been suspended');
     }
 
-    // Check if user has passkeys registered
-    const hasPasskey = await this.passkeyService.hasPasskey(user.id);
-
     // Return the AuthUser shape (shared between frontend and backend)
     // This is what controllers receive via @CurrentUser()
+    //
+    // Note: hasPasskey is false here to avoid an extra DB query on every
+    // authenticated request. The real value is populated by GET /auth/me
+    // and by login/register response builders via toAuthUser().
     return {
       id: user.id,
       email: user.email,
@@ -103,7 +102,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       avatarUrl: user.avatarUrl,
       hasPassword: !!user.passwordHash,
       has2FA: false, // Phase 3
-      hasPasskey,
+      hasPasskey: false, // Populated by GET /auth/me (avoids extra query per request)
     };
   }
 }

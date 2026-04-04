@@ -84,11 +84,13 @@ import {
   MessageResponseDto,
   RefreshResponseDto,
 } from './dto/auth.dto';
+import { REFRESH_TOKEN_COOKIE } from './auth.constants';
+import {
+  setRefreshCookie,
+  toAuthUser,
+} from './auth.helpers';
 import type { AuthUser } from '@paisa/shared';
 import type { User } from '@paisa/db';
-
-/** Name of the refresh token cookie */
-const REFRESH_TOKEN_COOKIE = 'refresh_token';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -132,12 +134,12 @@ export class AuthController {
       { userAgent: req.headers['user-agent'], ip: req.ip },
     );
 
-    this.setRefreshCookie(res, result.tokenPair.refreshToken);
+    setRefreshCookie(res, result.tokenPair.refreshToken, this.config);
 
     return {
       accessToken: result.tokenPair.accessToken,
       expiresIn: result.tokenPair.expiresIn,
-      user: await this.toAuthUser(result.user),
+      user: toAuthUser(result.user, false), // Newly registered — no passkeys
     };
   }
 
@@ -171,12 +173,12 @@ export class AuthController {
       ip: req.ip,
     });
 
-    this.setRefreshCookie(res, tokenPair.refreshToken);
+    setRefreshCookie(res, tokenPair.refreshToken, this.config);
 
     return {
       accessToken: tokenPair.accessToken,
       expiresIn: tokenPair.expiresIn,
-      user: await this.toAuthUser(req.user),
+      user: toAuthUser(req.user, await this.passkeyService.hasPasskey(req.user.id)),
     };
   }
 
@@ -212,7 +214,7 @@ export class AuthController {
       ip: req.ip,
     });
 
-    this.setRefreshCookie(res, tokenPair.refreshToken);
+    setRefreshCookie(res, tokenPair.refreshToken, this.config);
 
     return {
       accessToken: tokenPair.accessToken,
@@ -331,7 +333,7 @@ export class AuthController {
       const { user, tokenPair } = req.user;
 
       // Set refresh token as httpOnly cookie (same as login/register)
-      this.setRefreshCookie(res, tokenPair.refreshToken);
+      setRefreshCookie(res, tokenPair.refreshToken, this.config);
 
       // Redirect to frontend with access token in URL.
       // The frontend reads the token, stores it in memory, and clears the URL.
@@ -367,7 +369,9 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Current user', type: AuthUserDto })
   @ApiResponse({ status: 401, description: 'Not authenticated' })
   async me(@CurrentUser() user: AuthUser) {
-    return user;
+    // Enrich with hasPasskey (not included in JWT strategy to avoid per-request cost)
+    const hasPasskey = await this.passkeyService.hasPasskey(user.id);
+    return { ...user, hasPasskey };
   }
 
   /**
@@ -461,62 +465,4 @@ export class AuthController {
   // PRIVATE HELPERS
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  /**
-   * Set the refresh token as an httpOnly cookie.
-   *
-   * Cookie settings:
-   * - httpOnly: true   → JavaScript can't read it (XSS protection)
-   * - secure: true     → Only sent over HTTPS (except in dev)
-   * - sameSite: varies → Depends on environment (see AppConfigService)
-   * - path: /          → Sent with all requests to this domain
-   * - maxAge: 7d       → Matches refresh token TTL
-   */
-  private setRefreshCookie(res: Response, refreshToken: string): void {
-    const maxAgeMs = this.parseExpiryToMs(this.config.env.JWT_REFRESH_EXPIRY);
-
-    res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-      httpOnly: true,
-      secure: !this.config.isDevelopment,
-      sameSite: this.config.cookieSameSite,
-      path: '/',
-      maxAge: maxAgeMs,
-    });
-  }
-
-  /**
-   * Convert a Prisma User to the AuthUser shape shared with the frontend.
-   */
-  private async toAuthUser(user: User): Promise<AuthUser> {
-    const hasPasskey = await this.passkeyService.hasPasskey(user.id);
-
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role as 'USER' | 'ADMIN',
-      emailVerified: user.emailVerified,
-      avatarUrl: user.avatarUrl,
-      hasPassword: !!user.passwordHash,
-      has2FA: false, // Phase 3
-      hasPasskey,
-    };
-  }
-
-  /**
-   * Parse "7d", "15m", etc. to milliseconds.
-   */
-  private parseExpiryToMs(expiry: string): number {
-    const match = expiry.match(/^(\d+)(s|m|h|d)$/);
-    if (!match) return 7 * 24 * 60 * 60 * 1000; // Default 7 days
-
-    const value = parseInt(match[1], 10);
-    const multipliers: Record<string, number> = {
-      s: 1000,
-      m: 60_000,
-      h: 3_600_000,
-      d: 86_400_000,
-    };
-
-    return value * multipliers[match[2]];
-  }
 }

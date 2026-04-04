@@ -15,14 +15,17 @@
  *         ├── providers:
  *         │     ├── AuthService (orchestrates flows)
  *         │     ├── TokenService (JWT + refresh tokens)
+ *         │     ├── PasskeyService (WebAuthn registration + authentication)
  *         │     ├── LocalStrategy (email/password validation)
  *         │     ├── JwtStrategy (JWT token validation)
  *         │     ├── GoogleStrategy (Google OAuth — feature-flagged)
  *         │     ├── GoogleOAuthGuard (checks feature flag before OAuth)
+ *         │     ├── PasskeyGuard (checks feature flag before passkey ops)
  *         │     └── RolesGuard (RBAC)
  *         │
  *         ├── controllers:
- *         │     └── AuthController (HTTP endpoints)
+ *         │     ├── AuthController (HTTP endpoints)
+ *         │     └── PasskeyController (WebAuthn endpoints)
  *         │
  *         └── exports:
  *               ├── AuthService
@@ -54,6 +57,7 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { PasskeyGuard } from './guards/passkey.guard';
 import { PasskeyService } from './passkey.service';
 import { PasskeyController } from './passkey.controller';
 
@@ -99,6 +103,7 @@ import { PasskeyController } from './passkey.controller';
 
     // ─── Feature-flagged Guards ───
     GoogleOAuthGuard,
+    PasskeyGuard,
 
     // ─── Global Guards ───
     // APP_GUARD makes these apply to EVERY route automatically.

@@ -70,7 +70,7 @@ export const deleteAccountSchema = z.object({
 // ─── Passkey ───
 
 export const passkeyRegistrationSchema = z.object({
-  response: z.any(), // RegistrationResponseJSON — validated by @simplewebauthn/server
+  response: z.record(z.unknown()), // RegistrationResponseJSON — validated by @simplewebauthn/server
   deviceName: z
     .string()
     .max(100, 'Device name must be at most 100 characters')
@@ -78,8 +78,8 @@ export const passkeyRegistrationSchema = z.object({
 });
 
 export const passkeyAuthenticationSchema = z.object({
-  response: z.any(), // AuthenticationResponseJSON — validated by @simplewebauthn/server
-  challenge: z.string().min(1, 'Challenge is required'),
+  response: z.record(z.unknown()), // AuthenticationResponseJSON — validated by @simplewebauthn/server
+  sessionId: z.string().min(1, 'Session ID is required'),
 });
 
 export const passkeyRenameSchema = z.object({

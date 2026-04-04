@@ -30,6 +30,7 @@ import {
   Post,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiOperation,
@@ -48,13 +49,13 @@ import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { PasskeyService } from './passkey.service';
 import { AuthService } from './auth.service';
+import { PasskeyGuard } from './guards/passkey.guard';
 import { AppConfigService } from '../../core/config/config.service';
+import { setRefreshCookie, toAuthUser } from './auth.helpers';
 import type { AuthUser } from '@paisa/shared';
 
-/** Name of the refresh token cookie (same as auth.controller.ts) */
-const REFRESH_TOKEN_COOKIE = 'refresh_token';
-
 @ApiTags('Passkey')
+@UseGuards(PasskeyGuard)
 @Controller('auth/passkey')
 export class PasskeyController {
   constructor(
@@ -141,14 +142,14 @@ export class PasskeyController {
   @ApiResponse({ status: 401, description: 'Passkey not recognized or verification failed' })
   async verifyAuthentication(
     @Body(new ZodValidationPipe(passkeyAuthenticationSchema))
-    body: { response: any; challenge: string },
+    body: { response: Record<string, unknown>; sessionId: string },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {
     // Verify the passkey signature and get the user
     const user = await this.passkeyService.verifyAuthentication(
       body.response,
-      body.challenge,
+      body.sessionId,
     );
 
     // Generate tokens (same flow as email/password login)
@@ -158,12 +159,12 @@ export class PasskeyController {
     });
 
     // Set refresh cookie
-    this.setRefreshCookie(res, tokenPair.refreshToken);
+    setRefreshCookie(res, tokenPair.refreshToken, this.config);
 
     return {
       accessToken: tokenPair.accessToken,
       expiresIn: tokenPair.expiresIn,
-      user: this.toAuthUser(user),
+      user: toAuthUser(user, true), // They just logged in with a passkey
     };
   }
 
@@ -212,39 +213,4 @@ export class PasskeyController {
   // PRIVATE HELPERS
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  private setRefreshCookie(res: Response, refreshToken: string): void {
-    const maxAgeMs = this.parseExpiryToMs(this.config.env.JWT_REFRESH_EXPIRY);
-
-    res.cookie(REFRESH_TOKEN_COOKIE, refreshToken, {
-      httpOnly: true,
-      secure: !this.config.isDevelopment,
-      sameSite: this.config.cookieSameSite,
-      path: '/',
-      maxAge: maxAgeMs,
-    });
-  }
-
-  private toAuthUser(user: any): AuthUser {
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      role: user.role as 'USER' | 'ADMIN',
-      emailVerified: user.emailVerified,
-      avatarUrl: user.avatarUrl,
-      hasPassword: !!user.passwordHash,
-      has2FA: false,
-      hasPasskey: true, // They just logged in with one
-    };
-  }
-
-  private parseExpiryToMs(expiry: string): number {
-    const match = expiry.match(/^(\d+)(s|m|h|d)$/);
-    if (!match) return 7 * 24 * 60 * 60 * 1000;
-    const value = parseInt(match[1], 10);
-    const multipliers: Record<string, number> = {
-      s: 1000, m: 60_000, h: 3_600_000, d: 86_400_000,
-    };
-    return value * multipliers[match[2]];
-  }
 }
