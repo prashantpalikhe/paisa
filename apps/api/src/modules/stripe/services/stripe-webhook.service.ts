@@ -37,11 +37,12 @@
  * ```
  */
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import Stripe from 'stripe';
+import type { Stripe } from '../stripe-types';
 import { STRIPE_CLIENT } from '../stripe.constants';
 import { DatabaseService } from '../../../core/database/database.service';
 import { EventBusService } from '../../../common/event-bus/event-bus.service';
 import { DOMAIN_EVENTS, SUBSCRIPTION_STATUS } from '@paisa/shared';
+import type { SubscriptionStatus } from '@paisa/shared';
 import type { HandledStripeEvent } from '../stripe.constants';
 
 @Injectable()
@@ -141,6 +142,9 @@ export class StripeWebhookService {
     // Fetch the full subscription from Stripe to get period dates
     const stripeSub = await this.stripe.subscriptions.retrieve(stripeSubscriptionId);
 
+    // In Stripe SDK v22 (API 2026-03-25.dahlia), period dates moved to subscription items
+    const firstItem = stripeSub.items.data[0];
+
     // Upsert: idempotent — if the webhook is retried, we just update
     await this.db.subscription.upsert({
       where: { stripeSubscriptionId },
@@ -149,14 +153,14 @@ export class StripeWebhookService {
         planId,
         stripeSubscriptionId,
         status: this.mapStripeStatus(stripeSub.status),
-        currentPeriodStart: new Date(stripeSub.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        currentPeriodStart: new Date(firstItem.current_period_start * 1000),
+        currentPeriodEnd: new Date(firstItem.current_period_end * 1000),
         cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
       },
       update: {
         status: this.mapStripeStatus(stripeSub.status),
-        currentPeriodStart: new Date(stripeSub.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        currentPeriodStart: new Date(firstItem.current_period_start * 1000),
+        currentPeriodEnd: new Date(firstItem.current_period_end * 1000),
       },
     });
 
@@ -220,7 +224,7 @@ export class StripeWebhookService {
    * the subscription's period dates and ensure the status is ACTIVE.
    */
   private async handleInvoicePaid(invoice: Stripe.Invoice): Promise<void> {
-    const stripeSubscriptionId = invoice.subscription as string | null;
+    const stripeSubscriptionId = (invoice.parent?.subscription_details?.subscription as string) ?? null;
     if (!stripeSubscriptionId) return; // One-time invoice, not a subscription
 
     const subscription = await this.db.subscription.findUnique({
@@ -234,13 +238,14 @@ export class StripeWebhookService {
 
     // Fetch updated subscription from Stripe for current period dates
     const stripeSub = await this.stripe.subscriptions.retrieve(stripeSubscriptionId);
+    const firstItem = stripeSub.items.data[0];
 
     await this.db.subscription.update({
       where: { stripeSubscriptionId },
       data: {
         status: this.mapStripeStatus(stripeSub.status),
-        currentPeriodStart: new Date(stripeSub.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        currentPeriodStart: new Date(firstItem.current_period_start * 1000),
+        currentPeriodEnd: new Date(firstItem.current_period_end * 1000),
       },
     });
 
@@ -265,7 +270,7 @@ export class StripeWebhookService {
    * cancel the subscription.
    */
   private async handleInvoicePaymentFailed(invoice: Stripe.Invoice): Promise<void> {
-    const stripeSubscriptionId = invoice.subscription as string | null;
+    const stripeSubscriptionId = (invoice.parent?.subscription_details?.subscription as string) ?? null;
     if (!stripeSubscriptionId) return;
 
     const subscription = await this.db.subscription.findUnique({
@@ -320,12 +325,14 @@ export class StripeWebhookService {
     // When a user changes plans via the Customer Portal, the price changes.
     const newPlanId = await this.resolvePlanId(stripeSub);
 
+    const subItem = stripeSub.items.data[0];
+
     await this.db.subscription.update({
       where: { stripeSubscriptionId: stripeSub.id },
       data: {
         status: this.mapStripeStatus(stripeSub.status),
-        currentPeriodStart: new Date(stripeSub.current_period_start * 1000),
-        currentPeriodEnd: new Date(stripeSub.current_period_end * 1000),
+        currentPeriodStart: new Date(subItem.current_period_start * 1000),
+        currentPeriodEnd: new Date(subItem.current_period_end * 1000),
         cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
         canceledAt: stripeSub.canceled_at
           ? new Date(stripeSub.canceled_at * 1000)
@@ -385,8 +392,8 @@ export class StripeWebhookService {
    *
    * Stripe uses lowercase strings; our DB uses uppercase enum values.
    */
-  private mapStripeStatus(stripeStatus: Stripe.Subscription.Status): string {
-    const mapping: Record<string, string> = {
+  private mapStripeStatus(stripeStatus: string): SubscriptionStatus {
+    const mapping: Record<string, SubscriptionStatus> = {
       active: SUBSCRIPTION_STATUS.ACTIVE,
       past_due: SUBSCRIPTION_STATUS.PAST_DUE,
       canceled: SUBSCRIPTION_STATUS.CANCELED,

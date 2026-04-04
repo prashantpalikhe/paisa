@@ -39,7 +39,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiExcludeEndpoint } from '@nestjs/swagger';
 import { Request } from 'express';
-import Stripe from 'stripe';
+import type { Stripe } from '../stripe-types';
 import { STRIPE_CLIENT } from '../stripe.constants';
 import { StripeWebhookService } from '../services/stripe-webhook.service';
 import { AppConfigService } from '../../../core/config/config.service';
@@ -91,7 +91,7 @@ export class StripeWebhookController {
     try {
       event = this.stripe.webhooks.constructEvent(
         rawBody,
-        signature,
+        signature as string,
         this.config.features.stripe.webhookSecret!,
       );
     } catch (err) {

@@ -78,6 +78,7 @@ export {
 } from './validators/auth';
 
 export {
+  createCheckoutSchema,
   createProductSchema,
   createPlanSchema,
 } from './validators/billing';

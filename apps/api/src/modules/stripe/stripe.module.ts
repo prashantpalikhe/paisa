@@ -48,12 +48,21 @@
  * Per architectural rule: core modules NEVER import optional modules.
  */
 import { DynamicModule, Module, Logger } from '@nestjs/common';
-import Stripe from 'stripe';
+import StripeSDK from 'stripe';
 import { AppConfigService } from '../../core/config/config.service';
 import { STRIPE_CLIENT } from './stripe.constants';
+// Services
 import { StripeCustomerService } from './services/stripe-customer.service';
+import { StripeCheckoutService } from './services/stripe-checkout.service';
+import { StripeSubscriptionService } from './services/stripe-subscription.service';
+import { StripePortalService } from './services/stripe-portal.service';
 import { StripeWebhookService } from './services/stripe-webhook.service';
+// Controllers
 import { StripeWebhookController } from './controllers/stripe-webhook.controller';
+import { StripeCheckoutController } from './controllers/stripe-checkout.controller';
+import { StripePricingController } from './controllers/stripe-pricing.controller';
+import { StripeSubscriptionController } from './controllers/stripe-subscription.controller';
+import { StripePortalController } from './controllers/stripe-portal.controller';
 
 @Module({})
 export class StripeModule {
@@ -67,8 +76,8 @@ export class StripeModule {
         // Created once at module init, shared across all services.
         {
           provide: STRIPE_CLIENT,
-          useFactory: (config: AppConfigService): Stripe => {
-            const stripe = new Stripe(config.features.stripe.secretKey!, {
+          useFactory: (config: AppConfigService) => {
+            const stripe = new (StripeSDK as any)(config.features.stripe.secretKey!, {
               // Pin the API version. Webhook payloads must match what we expect.
               // This must match the SDK's default (stripe v22 = 2026-03-25.dahlia).
               // Update this when upgrading Stripe SDK and after testing.
@@ -84,16 +93,24 @@ export class StripeModule {
 
         // ─── Services ───
         StripeCustomerService,
+        StripeCheckoutService,
+        StripeSubscriptionService,
+        StripePortalService,
         StripeWebhookService,
       ],
 
       controllers: [
         StripeWebhookController,
+        StripeCheckoutController,
+        StripePricingController,
+        StripeSubscriptionController,
+        StripePortalController,
       ],
 
       exports: [
         STRIPE_CLIENT,
         StripeCustomerService,
+        StripeSubscriptionService,
       ],
     };
   }

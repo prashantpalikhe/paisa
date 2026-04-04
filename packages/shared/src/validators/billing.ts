@@ -10,6 +10,10 @@ export const createProductSchema = z.object({
   active: z.boolean().default(true),
 });
 
+export const createCheckoutSchema = z.object({
+  planId: z.string().min(1, 'Plan ID is required'),
+});
+
 export const createPlanSchema = z.object({
   productId: z.string().min(1),
   name: z.string().min(1).max(255),

@@ -21,7 +21,7 @@
  * Stripe's customer ID. We never store payment methods or card details.
  */
 import { Injectable, Inject, Logger } from '@nestjs/common';
-import Stripe from 'stripe';
+import type { Stripe } from '../stripe-types';
 import { STRIPE_CLIENT } from '../stripe.constants';
 import { DatabaseService } from '../../../core/database/database.service';
 
