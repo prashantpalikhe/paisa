@@ -27,7 +27,14 @@
  * the module loads. This means auth flows work identically regardless of
  * whether Redis is enabled.
  */
-import { DynamicModule, Module, Logger } from '@nestjs/common';
+import {
+  DynamicModule,
+  Inject,
+  Module,
+  Logger,
+  OnApplicationShutdown,
+  Optional,
+} from '@nestjs/common';
 import Redis from 'ioredis';
 import { AppConfigService } from '../../core/config/config.service';
 import { REDIS_CLIENT, TOKEN_STORE, CHALLENGE_STORE } from './redis.constants';
@@ -37,8 +44,19 @@ import { MemoryChallengeStore } from './stores/memory-challenge-store';
 import { RedisChallengeStore } from './stores/redis-challenge-store';
 
 @Module({})
-export class RedisModule {
+export class RedisModule implements OnApplicationShutdown {
   private static readonly logger = new Logger(RedisModule.name);
+
+  constructor(
+    @Optional() @Inject(REDIS_CLIENT) private readonly redis: Redis | null,
+  ) {}
+
+  async onApplicationShutdown() {
+    if (this.redis) {
+      RedisModule.logger.log('Disconnecting Redis...');
+      await this.redis.quit();
+    }
+  }
 
   static register(): DynamicModule {
     return {

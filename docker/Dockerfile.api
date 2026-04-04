@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Paisa API — Multi-stage Dockerfile
+#
+# Stages:
+#   1. base      — Node 22 + pnpm via corepack
+#   2. deps      — Install ALL dependencies (dev + prod)
+#   3. build     — Build packages + API
+#   4. production — Slim image with only production deps + compiled output
+#
+# Build:
+#   docker build -f docker/Dockerfile.api -t paisa-api .
+#
+# Run:
+#   docker run -p 3001:3001 --env-file .env paisa-api
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: Base ────────────────────────────────────────────────────────────
+FROM node:22-slim AS base
+
+# Enable corepack for pnpm
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+
+WORKDIR /app
+
+# ── Stage 2: Install dependencies ────────────────────────────────────────────
+FROM base AS deps
+
+# Copy workspace config files first (cache layer for dependencies)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/config/package.json ./packages/config/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY packages/email-templates/package.json ./packages/email-templates/
+
+# Install all dependencies (including dev — needed for build step)
+RUN pnpm install --frozen-lockfile
+
+# ── Stage 3: Build ───────────────────────────────────────────────────────────
+FROM deps AS build
+
+# Copy source code
+COPY packages/ ./packages/
+COPY apps/api/ ./apps/api/
+COPY tsconfig.base.json ./
+
+# Generate Prisma client (needs schema + prisma.config.ts)
+RUN pnpm --filter @paisa/db exec prisma generate
+
+# Build shared packages (config, shared, db — order matters via turbo)
+RUN pnpm --filter @paisa/config build && \
+    pnpm --filter @paisa/shared build && \
+    pnpm --filter @paisa/db build
+
+# Build the API
+RUN pnpm --filter @paisa/api build
+
+# ── Stage 4: Production ─────────────────────────────────────────────────────
+FROM base AS production
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+# Copy workspace config for pnpm
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/api/package.json ./apps/api/
+COPY packages/config/package.json ./packages/config/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY packages/email-templates/package.json ./packages/email-templates/
+
+# Install production-only dependencies
+RUN pnpm install --frozen-lockfile --prod
+
+# Copy built outputs from build stage
+COPY --from=build /app/apps/api/dist ./apps/api/dist
+COPY --from=build /app/packages/config/dist ./packages/config/dist
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/packages/db/dist ./packages/db/dist
+
+# Copy Prisma files (migrations + generated client)
+COPY --from=build /app/packages/db/prisma ./packages/db/prisma
+COPY --from=build /app/packages/db/src/generated ./packages/db/src/generated
+COPY --from=build /app/packages/db/prisma.config.ts ./packages/db/prisma.config.ts
+
+# Create uploads directory for local storage provider
+RUN mkdir -p /app/uploads
+
+EXPOSE 3001
+
+# Run migrations then start the API
+# Migrations run on every deploy — Prisma migrate deploy is idempotent
+CMD ["sh", "-c", "cd packages/db && npx prisma migrate deploy && cd /app && node apps/api/dist/main.js"]

@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Paisa Web — Multi-stage Dockerfile
+#
+# Nuxt 4 in SPA mode — builds to static assets served by a minimal Node server.
+#
+# Stages:
+#   1. base      — Node 22 + pnpm via corepack
+#   2. deps      — Install ALL dependencies
+#   3. build     — Build packages + Nuxt app
+#   4. production — Slim image with only the .output directory
+#
+# Build:
+#   docker build -f docker/Dockerfile.web -t paisa-web .
+#
+# Run:
+#   docker run -p 3000:3000 \
+#     -e NUXT_PUBLIC_API_BASE_URL=https://api.yourdomain.com \
+#     paisa-web
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Stage 1: Base ────────────────────────────────────────────────────────────
+FROM node:22-slim AS base
+
+RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
+
+WORKDIR /app
+
+# ── Stage 2: Install dependencies ────────────────────────────────────────────
+FROM base AS deps
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
+COPY apps/api/package.json ./apps/api/
+COPY apps/web/package.json ./apps/web/
+COPY packages/config/package.json ./packages/config/
+COPY packages/shared/package.json ./packages/shared/
+COPY packages/db/package.json ./packages/db/
+COPY packages/email-templates/package.json ./packages/email-templates/
+
+RUN pnpm install --frozen-lockfile
+
+# ── Stage 3: Build ───────────────────────────────────────────────────────────
+FROM deps AS build
+
+COPY packages/ ./packages/
+COPY apps/web/ ./apps/web/
+COPY tsconfig.base.json ./
+
+# Generate Prisma client (shared package depends on it)
+RUN pnpm --filter @paisa/db exec prisma generate
+
+# Build shared packages
+RUN pnpm --filter @paisa/config build && \
+    pnpm --filter @paisa/shared build && \
+    pnpm --filter @paisa/db build
+
+# Build the Nuxt app (outputs to .output/)
+RUN pnpm --filter @paisa/web build
+
+# ── Stage 4: Production ─────────────────────────────────────────────────────
+FROM node:22-slim AS production
+
+ENV NODE_ENV=production
+
+WORKDIR /app
+
+# Nuxt .output is self-contained — no node_modules needed
+COPY --from=build /app/apps/web/.output ./.output
+
+EXPOSE 3000
+
+# Nuxt's built-in Nitro server
+CMD ["node", ".output/server/index.mjs"]

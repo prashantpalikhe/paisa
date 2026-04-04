@@ -54,14 +54,21 @@ async function bootstrap() {
     res.json(document);
   });
 
+  // ─── Graceful Shutdown ───
+  // NestJS calls OnModuleDestroy hooks (DB disconnect, Redis close, intervals)
+  // when it receives SIGTERM/SIGINT. enableShutdownHooks() wires that up.
+  // Without this, `docker stop` / Kubernetes pod termination kills the process
+  // immediately without draining in-flight requests or closing connections.
+  app.enableShutdownHooks();
+
   // ─── Start ───
   const config = app.get(AppConfigService);
   const port = config.env.API_PORT;
   await app.listen(port);
 
   const logger = new (await import('@nestjs/common')).Logger('Bootstrap');
-  logger.log(`🚀 API running on http://localhost:${port}`);
-  logger.log(`📚 API docs at http://localhost:${port}/api/docs`);
+  logger.log(`API running on http://localhost:${port}`);
+  logger.log(`API docs at http://localhost:${port}/api/docs`);
 }
 
 bootstrap();
