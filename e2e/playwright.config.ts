@@ -36,7 +36,7 @@ const apiEnv = {
   API_BASE_URL: 'http://localhost:3001',
   FRONTEND_URL: 'http://localhost:3000',
   ADMIN_URL: 'http://localhost:3002',
-  FEATURE_EMAIL_ENABLED: 'true',
+  STORAGE_PROVIDER: 'local',
 }
 
 export default defineConfig({

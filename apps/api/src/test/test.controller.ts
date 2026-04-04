@@ -24,7 +24,7 @@
  * In production, these routes literally don't exist — they're not
  * "disabled", they're not registered at all.
  */
-import { Controller, Delete, Get, Inject, Optional, Post } from '@nestjs/common';
+import { Controller, Delete, Get, Inject, Post } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
 import { DatabaseService } from '../core/database/database.service';
@@ -36,13 +36,8 @@ import { InMemoryEmailProvider } from '../modules/email/providers/in-memory-emai
 export class TestController {
   constructor(
     private readonly db: DatabaseService,
-    /**
-     * The email provider might not be available if FEATURE_EMAIL_ENABLED=false.
-     * @Optional() tells NestJS to inject `undefined` instead of throwing.
-     */
-    @Optional()
     @Inject(EMAIL_PROVIDER)
-    private readonly emailProvider?: InMemoryEmailProvider,
+    private readonly emailProvider: InMemoryEmailProvider,
   ) {}
 
   /**

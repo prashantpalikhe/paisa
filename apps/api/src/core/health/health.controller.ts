@@ -52,11 +52,9 @@ export class HealthController {
         database: dbHealthy,
       },
       features: {
-        email: this.config.features.email.enabled,
         stripe: this.config.features.stripe.enabled,
         redis: this.config.features.redis.enabled,
         rabbitmq: this.config.features.rabbitmq.enabled,
-        storage: this.config.features.storage.enabled,
         websockets: this.config.features.websockets.enabled,
         sentry: this.config.features.sentry.enabled,
       },

@@ -1,7 +1,7 @@
 /**
  * # Email Module
  *
- * Optional module — loaded ONLY when `FEATURE_EMAIL_ENABLED=true`.
+ * Always-loaded module that handles transactional emails.
  * Core modules (Auth) never import this. Communication is via EventBus.
  *
  * ## Provider selection (automatic, based on environment)
@@ -12,26 +12,8 @@
  * | test          | InMemory   | Captures emails for test assertions|
  * | production    | Resend     | Sends real emails via Resend API   |
  *
- * ## Module registration
- *
- * Uses `DynamicModule` with a static `register()` method:
- *
- * ```typescript
- * // In AppModule
- * @Module({
- *   imports: [
- *     ...(features.email.enabled ? [EmailModule.register()] : []),
- *   ],
- * })
- * ```
- *
- * The `register()` pattern lets us configure the provider based on
- * runtime config without making the module itself complicated.
- *
- * ## Why not just import the module statically?
- *
- * Static imports can't be conditional. We need the feature flag check
- * to happen at module-evaluation time (before NestJS bootstraps).
+ * Uses `DynamicModule` with a static `register()` method so the
+ * provider can be chosen based on runtime config.
  */
 import { DynamicModule, Module } from '@nestjs/common';
 import { AppConfigService } from '../../core/config/config.service';

@@ -422,15 +422,15 @@ Every feature now **fails fast** at startup with a clear message if enabled with
     HealthModule,
     AuthModule,
     UserModule,
+    EmailModule.register(),
+    StorageModule.register(),
 
     // --- Conditionally loaded ---
     // Each module's .register() returns the module or undefined
     ...[
-      features.email.enabled     && EmailModule.register(),
       features.stripe.enabled    && StripeModule.register(),
       features.redis.enabled     && CacheModule.register(),
       features.rabbitmq.enabled  && QueueModule.register(),
-      features.storage.enabled   && StorageModule.register(),
       features.websockets.enabled && WebsocketModule.register(),
       features.sentry.enabled   && SentryModule.register(),
     ].filter(Boolean),
@@ -1020,12 +1020,12 @@ await this.resend.emails.send({
 
 Dependencies: `react` and `react-dom` are **only** in the `packages/email-templates` package, isolated from the rest of the monorepo.
 
-### Toggleable Behavior
+### Provider Behavior by Environment
 
-When `features.email.enabled = false`:
-- Auth still works (no verification emails sent, emailVerified defaults to true)
-- Password reset returns success but sends no email (security: don't reveal email existence)
-- Console logs what *would* have been sent (development convenience)
+Email is always enabled. The provider is selected automatically by `NODE_ENV`:
+- **development**: ConsoleEmailProvider — prints emails to terminal
+- **test**: InMemoryEmailProvider — captures emails for assertions
+- **production**: ResendEmailProvider — real delivery (requires `RESEND_API_KEY`, `EMAIL_FROM`)
 
 ---
 
@@ -1272,12 +1272,12 @@ const r2 = new S3Client({
 });
 ```
 
-### Toggleable Behavior
+### Provider Behavior
 
-When `features.storage.enabled = false` or `provider = 'local'`:
-- Files stored on local disk (`./uploads/`)
-- Served via Express static middleware
-- Same API interface, different backend
+Storage is always enabled. The provider is selected by `STORAGE_PROVIDER` env var:
+- **`local`** (default): Files stored on local disk (`./uploads/`), served via Express static middleware
+- **`r2`**: Uploads to Cloudflare R2 (requires R2 credentials)
+- Same API interface regardless of provider
 
 ---
 
@@ -1612,11 +1612,10 @@ WEBAUTHN_RP_ID=localhost
 WEBAUTHN_ORIGIN=http://localhost:3000
 
 # ─── Features (toggle on/off) ───
-FEATURE_EMAIL_ENABLED=true
+# Email and Storage are always enabled (core functionality).
 FEATURE_STRIPE_ENABLED=false
 FEATURE_REDIS_ENABLED=true
 FEATURE_RABBITMQ_ENABLED=false
-FEATURE_STORAGE_ENABLED=false
 FEATURE_WEBSOCKETS_ENABLED=false
 FEATURE_SENTRY_ENABLED=false
 

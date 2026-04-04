@@ -31,8 +31,7 @@
  * - Type: image/jpeg, image/png, image/webp, image/gif only
  *
  * Storage is handled by the StorageModule (local in dev, R2 in production).
- * If storage is disabled (FEATURE_STORAGE_ENABLED=false), avatar endpoints
- * return 404 — they're feature-flagged at the controller level.
+ * StorageModule is always loaded — email and storage are core functionality.
  */
 import {
   BadRequestException,
@@ -44,7 +43,6 @@ import {
   HttpStatus,
   Inject,
   NotFoundException,
-  Optional,
   Patch,
   Post,
   Res,
@@ -94,14 +92,8 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly config: AppConfigService,
-    /**
-     * Storage provider is optional because FEATURE_STORAGE_ENABLED might be false.
-     * When storage is disabled, the module isn't loaded and this will be undefined.
-     * We use @Optional() so NestJS doesn't throw "can't resolve STORAGE_PROVIDER".
-     */
-    @Optional()
     @Inject(STORAGE_PROVIDER)
-    private readonly storage: StorageProvider | undefined,
+    private readonly storage: StorageProvider,
   ) {}
 
   /**
@@ -166,16 +158,10 @@ export class UserController {
   @ApiOperation({ summary: 'Upload avatar' })
   @ApiResponse({ status: 200, description: 'Avatar uploaded' })
   @ApiResponse({ status: 400, description: 'Invalid file' })
-  @ApiResponse({ status: 404, description: 'Storage not enabled' })
   async uploadAvatar(
     @CurrentUser() currentUser: AuthUser,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    // Guard: storage must be enabled
-    if (!this.storage) {
-      throw new NotFoundException('File storage is not enabled');
-    }
-
     // Guard: file must be present
     if (!file) {
       throw new BadRequestException('No file uploaded');
@@ -236,12 +222,7 @@ export class UserController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Remove avatar' })
   @ApiResponse({ status: 200, description: 'Avatar removed' })
-  @ApiResponse({ status: 404, description: 'Storage not enabled' })
   async removeAvatar(@CurrentUser() currentUser: AuthUser) {
-    if (!this.storage) {
-      throw new NotFoundException('File storage is not enabled');
-    }
-
     const existingUser = await this.userService.findById(currentUser.id);
     if (!existingUser) {
       throw new NotFoundException('User not found');

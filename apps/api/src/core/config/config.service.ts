@@ -107,11 +107,9 @@ export class AppConfigService {
       'Auth - Google': this.features.auth.google.enabled,
       'Auth - Passkey': this.features.auth.passkey.enabled,
       'Auth - 2FA': this.features.auth.twoFactor.enabled,
-      Email: this.features.email.enabled,
       Stripe: this.features.stripe.enabled,
       Redis: this.features.redis.enabled,
       RabbitMQ: this.features.rabbitmq.enabled,
-      Storage: this.features.storage.enabled,
       WebSockets: this.features.websockets.enabled,
       Sentry: this.features.sentry.enabled,
     };

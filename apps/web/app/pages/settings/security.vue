@@ -78,8 +78,8 @@
           </CardContent>
         </Card>
 
-        <!-- Connected Accounts -->
-        <Card>
+        <!-- Connected Accounts (only when Google auth is enabled) -->
+        <Card v-if="appConfig.auth.google">
           <CardHeader>
             <CardTitle>Connected accounts</CardTitle>
             <CardDescription>
@@ -188,6 +188,7 @@ definePageMeta({
 useHead({ title: 'Security Settings' })
 
 const { apiFetch, clearAuth } = useAuth()
+const { appConfig } = useFeatureFlags()
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Change Password

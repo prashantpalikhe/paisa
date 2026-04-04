@@ -10,11 +10,9 @@ describe('HealthController', () => {
 
   const mockConfig = {
     features: {
-      email: { enabled: false },
       stripe: { enabled: false },
       redis: { enabled: true },
       rabbitmq: { enabled: false },
-      storage: { enabled: false },
       websockets: { enabled: false },
       sentry: { enabled: false },
     },
@@ -60,11 +58,9 @@ describe('HealthController', () => {
     const result = await controller.check();
 
     expect(result.features).toEqual({
-      email: false,
       stripe: false,
       redis: true,
       rabbitmq: false,
-      storage: false,
       websockets: false,
       sentry: false,
     });

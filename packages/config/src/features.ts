@@ -54,9 +54,7 @@ export const INFRASTRUCTURE_FLAG_NAMES = [
   'redis',
   'rabbitmq',
   'sentry',
-  'storage',
   'websockets',
-  'email',
 ] as const;
 
 export type InfrastructureFlagName = (typeof INFRASTRUCTURE_FLAG_NAMES)[number];
@@ -79,7 +77,6 @@ export const featuresSchema = z.object({
     twoFactor: z.object({ enabled: z.boolean() }),
   }),
   email: z.object({
-    enabled: z.boolean(),
     provider: z.enum(['resend']).default('resend'),
     apiKey: z.string().optional(),
     fromAddress: z.string().optional(),
@@ -89,12 +86,11 @@ export const featuresSchema = z.object({
     (data) => {
       // apiKey and fromAddress are only required in production.
       // In dev/test, the Console/InMemory providers don't use them.
-      if (!data.enabled) return true;
       if (data.nodeEnv !== 'production') return true;
       return !!(data.apiKey && data.fromAddress);
     },
     {
-      message: 'Email (Resend) requires [apiKey, fromAddress] when enabled in production',
+      message: 'Email (Resend) requires [apiKey, fromAddress] in production',
     },
   ),
   stripe: requiredWhenEnabled(
@@ -126,21 +122,16 @@ export const featuresSchema = z.object({
     ['url'],
     'RabbitMQ',
   ),
-  storage: requiredWhenEnabled(
-    z.object({
-      enabled: z.boolean(),
-      provider: z.enum(['r2', 'local']).default('local'),
-      r2AccountId: z.string().optional(),
-      r2AccessKeyId: z.string().optional(),
-      r2SecretAccessKey: z.string().optional(),
-      r2BucketName: z.string().optional(),
-      r2PublicUrl: z.string().optional(),
-    }),
-    [], // base fields; R2-specific fields validated below
-    'Storage',
-  ).refine(
+  storage: z.object({
+    provider: z.enum(['r2', 'local']).default('local'),
+    r2AccountId: z.string().optional(),
+    r2AccessKeyId: z.string().optional(),
+    r2SecretAccessKey: z.string().optional(),
+    r2BucketName: z.string().optional(),
+    r2PublicUrl: z.string().optional(),
+  }).refine(
     (data) => {
-      if (!data.enabled || data.provider !== 'r2') return true;
+      if (data.provider !== 'r2') return true;
       return !!(
         data.r2AccountId &&
         data.r2AccessKeyId &&
@@ -189,7 +180,6 @@ export function parseFeatures(env: Record<string, string | undefined>): Features
       },
     },
     email: {
-      enabled: env.FEATURE_EMAIL_ENABLED === 'true',
       provider: env.EMAIL_PROVIDER || 'resend',
       apiKey: env.RESEND_API_KEY,
       fromAddress: env.EMAIL_FROM,
@@ -213,7 +203,6 @@ export function parseFeatures(env: Record<string, string | undefined>): Features
       managementPassword: env.RABBITMQ_MANAGEMENT_PASSWORD,
     },
     storage: {
-      enabled: env.FEATURE_STORAGE_ENABLED === 'true',
       provider: env.STORAGE_PROVIDER || 'local',
       r2AccountId: env.R2_ACCOUNT_ID,
       r2AccessKeyId: env.R2_ACCESS_KEY_ID,

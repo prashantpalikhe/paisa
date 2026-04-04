@@ -19,8 +19,8 @@ import { TestModule } from './test/test.module';
  * ## Module loading order
  *
  * 1. **Always loaded**: Config, Database, Logging, Health, EventBus
- * 2. **Always loaded**: Auth, User (core domain modules)
- * 3. **Conditionally loaded**: Email, Stripe, Cache, Queue, Storage, WebSocket, Sentry
+ * 2. **Always loaded**: Auth, User, Email, Storage (core domain modules)
+ * 3. **Conditionally loaded**: Stripe, Cache, Queue, WebSocket, Sentry
  *
  * ## How conditional loading works
  *
@@ -37,12 +37,11 @@ import { TestModule } from './test/test.module';
  */
 
 // ─── Compute optional modules at module-evaluation time ───
-// This is safe because loadEnvFromRoot() runs before this file is evaluated.
+// Used for conditionally loading Stripe, Redis, etc. based on feature flags.
+// Email and Storage are always loaded (core functionality).
 const features = parseFeatures(process.env);
 
 const optionalModules = [
-  features.email.enabled && EmailModule.register(),
-  features.storage.enabled && StorageModule.register(),
   // features.stripe.enabled    && StripeModule.register(),
   // features.redis.enabled     && CacheModule.register(),
   // features.rabbitmq.enabled  && QueueModule.register(),
@@ -62,6 +61,8 @@ const optionalModules = [
     // ─── Always loaded (core domain) ───
     AuthModule,
     UserModule,
+    EmailModule.register(),
+    StorageModule.register(),
 
     // ─── Conditionally loaded (optional integrations) ───
     ...optionalModules,

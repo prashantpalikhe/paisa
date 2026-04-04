@@ -1,12 +1,12 @@
 /**
  * # Storage Module
  *
- * Optional module — loaded ONLY when `FEATURE_STORAGE_ENABLED=true`.
+ * Always-loaded module that provides file storage (avatars, uploads, etc.).
  * Follows the same pattern as EmailModule:
  *
  * | STORAGE_PROVIDER | Implementation       | Use case         |
  * |------------------|----------------------|------------------|
- * | local            | LocalStorageProvider  | Development      |
+ * | local            | LocalStorageProvider  | Development/Test |
  * | r2               | R2StorageProvider     | Production       |
  *
  * ## How provider selection works
@@ -18,13 +18,7 @@
  * STORAGE_PROVIDER=r2     → R2StorageProvider     (uploads to Cloudflare R2)
  * ```
  *
- * ## Registration in AppModule
- *
- * ```typescript
- * const optionalModules = [
- *   features.storage.enabled && StorageModule.register(),
- * ].filter(Boolean);
- * ```
+ * Defaults to `local` when `STORAGE_PROVIDER` env is not set.
  */
 import { DynamicModule, Module } from '@nestjs/common';
 import { AppConfigService } from '../../core/config/config.service';

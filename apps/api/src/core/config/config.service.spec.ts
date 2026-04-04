@@ -37,13 +37,12 @@ describe('AppConfigService', () => {
     expect(service.env.DATABASE_URL).toBe(validEnv.DATABASE_URL);
   });
 
-  it('should default all features to disabled', () => {
+  it('should default all optional features to disabled', () => {
     expect(service.features.stripe.enabled).toBe(false);
     expect(service.features.redis.enabled).toBe(false);
     expect(service.features.rabbitmq.enabled).toBe(false);
     expect(service.features.sentry.enabled).toBe(false);
     expect(service.features.websockets.enabled).toBe(false);
-    expect(service.features.email.enabled).toBe(false);
   });
 
   it('should detect test environment', () => {
@@ -60,6 +59,9 @@ describe('AppConfigService', () => {
     process.env.NODE_ENV = 'production';
     process.env.FRONTEND_URL = 'https://app.vercel.app';
     process.env.API_BASE_URL = 'https://api.railway.app';
+    // Email config required in production (no feature flag gate)
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.EMAIL_FROM = 'test@example.com';
 
     // Recreate service with new env
     const config = new AppConfigService({
@@ -73,6 +75,9 @@ describe('AppConfigService', () => {
     process.env.NODE_ENV = 'production';
     process.env.FRONTEND_URL = 'https://myapp.com';
     process.env.API_BASE_URL = 'https://api.myapp.com';
+    // Email config required in production (no feature flag gate)
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.EMAIL_FROM = 'test@example.com';
 
     const config = new AppConfigService({
       get: (key: string) => process.env[key],

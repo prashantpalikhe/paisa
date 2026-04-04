@@ -50,6 +50,12 @@ export function configureApp(app: INestApplication): void {
             },
           }
         : undefined, // Use Helmet's strict defaults in production
+      // Allow cross-origin resource loading. The API is consumed from a
+      // different origin (frontend at :3000, API at :3001 in dev). Helmet's
+      // default `same-origin` blocks the browser from loading images (avatars)
+      // and other resources served by the API. Since we already configure CORS
+      // to control which origins can access the API, this is safe.
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
     }),
   );
   app.use(cookieParser());

@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { loadEnvFromRoot } from '@paisa/config';
 import { AppConfigService } from './config.service';
+import { PublicConfigController } from './public-config.controller';
 
 /**
  * # Core Config Module
@@ -34,6 +35,7 @@ loadEnvFromRoot();
       ignoreEnvFile: true,
     }),
   ],
+  controllers: [PublicConfigController],
   providers: [AppConfigService],
   exports: [AppConfigService],
 })

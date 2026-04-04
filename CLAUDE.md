@@ -79,8 +79,9 @@ docker compose -f docker/docker-compose.yml down                    # Stop all
 - **Business flags**: Stored in DB (`FeatureFlag` table), togglable at runtime via admin
 
 ### Architectural invariant
-Core modules (Config, Database, Auth) NEVER import optional modules (Stripe, Email, Redis).
+Core modules (Config, Database, Auth) NEVER import optional modules (Stripe, Redis).
 Communication between them happens via EventBus only.
+Email and Storage are always-loaded core modules (not feature-flagged).
 
 ### App configuration — single source of truth
 `src/configure-app.ts` is shared between `main.ts` and e2e tests.
@@ -103,7 +104,7 @@ NEVER add middleware directly in `main.ts` — add it to `configureApp()`.
 - Global setup: `e2e/global-setup.ts` — waits for postgres-test, runs migrations, builds packages
 - Fixtures: `e2e/fixtures/index.ts` — `resetDb` auto-fixture truncates all tables before each test, `api` fixture provides `APIRequestContext` for direct API calls
 - Test infrastructure: `apps/api/src/test/test.module.ts` + `test.controller.ts` — test-only HTTP endpoints (POST /test/reset-database, GET /test/emails, DELETE /test/emails). Only loaded when `NODE_ENV=test`.
-- Email testing: API runs with `FEATURE_EMAIL_ENABLED=true` + `NODE_ENV=test` → `InMemoryEmailProvider` captures emails → Playwright reads them via `GET /test/emails`. Use `waitForEmails()` helper for polling (email sending is async via EventBus).
+- Email testing: Email is always enabled. In test mode (`NODE_ENV=test`), `InMemoryEmailProvider` captures emails → Playwright reads them via `GET /test/emails`. Use `waitForEmails()` helper for polling (email sending is async via EventBus).
 - Selector strategy: Use `page.locator('#id')` for form inputs (reka-ui Label doesn't work with Playwright's `getByLabel()`). Use `getByRole()` for headings/buttons. Use `exact: true` when names are ambiguous.
 - All forms use `novalidate` attribute so Zod validation handles everything (prevents browser HTML5 validation tooltips from interfering).
 - `reuseExistingServer: true` in dev — if API/Nuxt are already running, Playwright reuses them. Kill stale servers if env vars need to change.
@@ -173,13 +174,16 @@ API docs title, email templates, and frontend theme all read from this config.
        ```
     5. Restart the API server — "Continue with Google" buttons on login/register are always visible but the backend returns 404 when the flag is off
     6. For production: update `GOOGLE_CALLBACK_URL` to your real API domain, add production origins/redirects in Google Console, and publish the OAuth consent screen
-- Email module: Feature-flagged via `FEATURE_EMAIL_ENABLED`. Three-tier provider setup:
+- Email module: Always enabled (core functionality). Three-tier provider setup by `NODE_ENV`:
   - Development (`NODE_ENV=development`): ConsoleEmailProvider — prints emails to terminal
   - Test (`NODE_ENV=test`): InMemoryEmailProvider — captures emails for assertions via `getSentEmails()`
   - Production (`NODE_ENV=production`): ResendEmailProvider — real delivery via Resend API (requires `RESEND_API_KEY`, `EMAIL_FROM`)
   - Templates are pure functions in `email/templates/` — no templating engine, just TypeScript string functions
   - Event listener (`email-event.listener.ts`) subscribes to domain events via `@OnEvent()` — all handlers wrap in try/catch (emails are best-effort, never break auth flows)
-  - Conditional module loading: `AppModule` computes `optionalModules` array at module-evaluation time using `parseFeatures(process.env)`
+- Storage module: Always enabled (core functionality). Provider selected by `STORAGE_PROVIDER` env var:
+  - `local` (default): LocalStorageProvider — saves to `uploads/` directory, served via Express static middleware
+  - `r2`: R2StorageProvider — uploads to Cloudflare R2 via S3 SDK (requires R2 credentials)
+- Conditional module loading: `AppModule` computes `optionalModules` array at module-evaluation time using `parseFeatures(process.env)` for Stripe, Redis, RabbitMQ, WebSockets, Sentry
 
 ### Nuxt Frontend (apps/web)
 - Nuxt 4.4+ with native `app/` directory structure
@@ -221,13 +225,17 @@ API docs title, email templates, and frontend theme all read from this config.
 - **tsup + incremental TS**: tsup DTS generation conflicts with `incremental: true` in tsconfig. Each package has a `tsconfig.build.json` with `incremental: false`.
 - **OAuth callback uses `@Res()` not `@Res({ passthrough: true })`**: Because it issues a redirect, not a JSON response. NestJS interceptors are bypassed.
 - **GoogleStrategy always registered**: Even when the feature flag is off. `GoogleOAuthGuard` prevents invocation — avoids dynamic module complexity.
-- **Email feature flag in dev/test**: `FEATURE_EMAIL_ENABLED=true` works without `RESEND_API_KEY` in dev/test (Console/InMemory providers don't need it). Production requires the key.
+- **Email config in dev/test**: Email is always enabled. `RESEND_API_KEY` is only required in production — dev/test use Console/InMemory providers that don't need it.
 - **Health e2e test**: Don't hardcode feature flag booleans — they change with `.env`. Use `expect.any(Boolean)` instead.
 - **Tailwind v4 ≠ v3**: No `tailwind.config.ts` — configuration is CSS-first via `@theme inline` in `tailwind.css`. Do NOT install `@nuxtjs/tailwindcss`.
 - **shadcn-vue components are local**: They live in `app/components/ui/` as source files you own. Edit them freely. Add new ones with `pnpm dlx shadcn-vue@latest add <name>`.
 - **`nuxi prepare` before shadcn init**: `.nuxt` types must exist for the shadcn CLI to resolve paths.
 - **Auth middleware waits for loading**: Both `auth.ts` and `guest.ts` middleware watch `isLoading` to avoid incorrect redirects during session restoration on page refresh.
-- **EmailModule is global**: `EmailModule.register()` sets `global: true` so `EMAIL_PROVIDER` is injectable in any module (e.g. `TestModule`). Without this, `@Optional() @Inject(EMAIL_PROVIDER)` in `TestController` resolves to `undefined`.
+- **EmailModule is global**: `EmailModule.register()` sets `global: true` so `EMAIL_PROVIDER` is injectable in any module (e.g. `TestModule`).
 - **TestModule only in test**: `TestModule` is conditionally imported in `AppModule` via `...(process.env.NODE_ENV === 'test' ? [TestModule] : [])`. In production, the endpoints don't exist at all.
 - **Playwright `getByLabel()` + reka-ui**: Playwright can't resolve labels through reka-ui's Label component chain. Use `page.locator('#id')` for form inputs instead.
 - **Playwright reuses running servers**: With `reuseExistingServer: true`, if the API is already running with `NODE_ENV=development`, email tests will fail because `InMemoryEmailProvider` is only used in test mode. Kill stale servers before running `pnpm test:e2e:web`.
+- **Helmet CORP blocks cross-origin images**: Helmet's default `Cross-Origin-Resource-Policy: same-origin` blocks the browser from loading images served by the API (port 3001) when the page is on the frontend (port 3000). Set `crossOriginResourcePolicy: { policy: 'cross-origin' }` in Helmet config since the API is consumed cross-origin by design.
+- **Don't name composables `useAppConfig`**: Nuxt has a built-in `useAppConfig` composable. Shadowing it causes warnings and breaks auto-imports. Our feature flags composable is named `useFeatureFlags` to avoid this.
+- **Feature flags for frontend**: `useFeatureFlags()` composable fetches `GET /config` on app startup via `config.client.ts` plugin. Caches in `useState`. Used to conditionally show/hide Google OAuth buttons and other feature-gated UI.
+- **`PublicConfigController`**: Dedicated `GET /config` endpoint exposes client-safe feature flags (auth providers, Stripe). Lives in `CoreConfigModule`. Never exposes secrets — only booleans.
