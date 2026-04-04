@@ -1,6 +1,8 @@
 # Local development infrastructure only.
 # Application code (NestJS, Nuxt) runs natively via `pnpm dev`.
 
+name: paisa
+
 services:
   postgres:
     image: postgres:17

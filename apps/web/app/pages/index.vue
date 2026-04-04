@@ -31,7 +31,7 @@
         A production-ready SaaS boilerplate with authentication, billing,
         email, and everything you need to launch your next product.
       </p>
-      <div class="mt-10 flex items-center gap-4">
+      <div class="mt-10 flex flex-col items-center gap-4 sm:flex-row">
         <Button size="lg" as-child>
           <NuxtLink to="/auth/register">Get started</NuxtLink>
         </Button>

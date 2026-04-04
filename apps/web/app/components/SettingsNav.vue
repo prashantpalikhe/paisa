@@ -6,12 +6,12 @@
   Responsive: vertical sidebar on desktop, horizontal on mobile.
 -->
 <template>
-  <nav class="flex gap-1 sm:flex-col" aria-label="Settings navigation">
+  <nav class="flex overflow-x-auto gap-1 sm:flex-col sm:overflow-x-visible" aria-label="Settings navigation">
     <NuxtLink
       v-for="item in items"
       :key="item.to"
       :to="item.to"
-      class="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+      class="flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors"
       :class="[
         isActive(item.to)
           ? 'bg-secondary text-foreground'
