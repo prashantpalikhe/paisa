@@ -54,6 +54,8 @@ import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import { RolesGuard } from './guards/roles.guard';
+import { PasskeyService } from './passkey.service';
+import { PasskeyController } from './passkey.controller';
 
 @Module({
   imports: [
@@ -78,12 +80,13 @@ import { RolesGuard } from './guards/roles.guard';
     }),
   ],
 
-  controllers: [AuthController],
+  controllers: [AuthController, PasskeyController],
 
   providers: [
     // ─── Services ───
     AuthService,
     TokenService,
+    PasskeyService,
 
     // ─── Passport Strategies ───
     // These are auto-detected by Passport when registered as providers.

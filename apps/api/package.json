@@ -30,6 +30,7 @@
     "@paisa/shared": "workspace:*",
     "@prisma/adapter-pg": "^7.6.0",
     "@scalar/nestjs-api-reference": "^1.1.5",
+    "@simplewebauthn/server": "^13.3.0",
     "argon2": "^0.44.0",
     "cookie-parser": "^1.4.7",
     "helmet": "^8.1.0",

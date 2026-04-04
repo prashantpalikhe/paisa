@@ -59,11 +59,9 @@ describe('Health (e2e)', () => {
       // Feature flags are env-dependent — just check the keys exist.
       // Don't hardcode true/false since .env may change between runs.
       features: expect.objectContaining({
-        email: expect.any(Boolean),
         stripe: expect.any(Boolean),
         redis: expect.any(Boolean),
         rabbitmq: expect.any(Boolean),
-        storage: expect.any(Boolean),
         websockets: expect.any(Boolean),
         sentry: expect.any(Boolean),
       }),

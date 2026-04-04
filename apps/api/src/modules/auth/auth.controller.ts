@@ -66,6 +66,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AppConfigService } from '../../core/config/config.service';
 import { AuthService } from './auth.service';
+import { PasskeyService } from './passkey.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { GoogleOAuthGuard } from './guards/google-oauth.guard';
 import type { GoogleOAuthResult } from './strategies/google.strategy';
@@ -94,6 +95,7 @@ export class AuthController {
 
   constructor(
     private readonly authService: AuthService,
+    private readonly passkeyService: PasskeyService,
     private readonly config: AppConfigService,
   ) {}
 
@@ -133,7 +135,7 @@ export class AuthController {
     return {
       accessToken: result.tokenPair.accessToken,
       expiresIn: result.tokenPair.expiresIn,
-      user: this.toAuthUser(result.user),
+      user: await this.toAuthUser(result.user),
     };
   }
 
@@ -172,7 +174,7 @@ export class AuthController {
     return {
       accessToken: tokenPair.accessToken,
       expiresIn: tokenPair.expiresIn,
-      user: this.toAuthUser(req.user),
+      user: await this.toAuthUser(req.user),
     };
   }
 
@@ -460,7 +462,9 @@ export class AuthController {
   /**
    * Convert a Prisma User to the AuthUser shape shared with the frontend.
    */
-  private toAuthUser(user: User): AuthUser {
+  private async toAuthUser(user: User): Promise<AuthUser> {
+    const hasPasskey = await this.passkeyService.hasPasskey(user.id);
+
     return {
       id: user.id,
       email: user.email,
@@ -469,7 +473,7 @@ export class AuthController {
       emailVerified: user.emailVerified,
       avatarUrl: user.avatarUrl,
       has2FA: false, // Phase 3
-      hasPasskey: false, // Phase 3
+      hasPasskey,
     };
   }
 

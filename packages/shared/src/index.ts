@@ -69,6 +69,9 @@ export {
   updateProfileSchema,
   deleteAccountSchema,
   twoFactorVerifySchema,
+  passkeyRegistrationSchema,
+  passkeyAuthenticationSchema,
+  passkeyRenameSchema,
 } from './validators/auth';
 
 export {

@@ -63,6 +63,28 @@ export const deleteAccountSchema = z.object({
   password: z.string().min(1, 'Password is required'),
 });
 
+// ─── Passkey ───
+
+export const passkeyRegistrationSchema = z.object({
+  response: z.any(), // RegistrationResponseJSON — validated by @simplewebauthn/server
+  deviceName: z
+    .string()
+    .max(100, 'Device name must be at most 100 characters')
+    .optional(),
+});
+
+export const passkeyAuthenticationSchema = z.object({
+  response: z.any(), // AuthenticationResponseJSON — validated by @simplewebauthn/server
+  challenge: z.string().min(1, 'Challenge is required'),
+});
+
+export const passkeyRenameSchema = z.object({
+  deviceName: z
+    .string()
+    .min(1, 'Device name is required')
+    .max(100, 'Device name must be at most 100 characters'),
+});
+
 export const twoFactorVerifySchema = z.object({
   code: z
     .string()

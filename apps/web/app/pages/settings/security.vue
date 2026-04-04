@@ -108,6 +108,108 @@
           </CardContent>
         </Card>
 
+        <!-- Passkeys (only when passkey auth is enabled) -->
+        <Card v-if="appConfig.auth.passkey">
+          <CardHeader>
+            <CardTitle>Passkeys</CardTitle>
+            <CardDescription>
+              Sign in with your fingerprint, face, or device PIN.
+              Passkeys are more secure than passwords and can't be phished.
+            </CardDescription>
+          </CardHeader>
+          <CardContent class="space-y-4">
+            <!-- Existing passkeys list -->
+            <div v-if="passkeys.length > 0" class="space-y-3">
+              <div
+                v-for="pk in passkeys"
+                :key="pk.id"
+                class="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border p-4"
+              >
+                <div class="flex items-center gap-3">
+                  <KeyRound class="h-5 w-5 text-muted-foreground" />
+                  <div>
+                    <p class="text-sm font-medium">
+                      {{ pk.deviceName || 'Unnamed passkey' }}
+                    </p>
+                    <p class="text-xs text-muted-foreground">
+                      Added {{ new Date(pk.createdAt).toLocaleDateString() }}
+                    </p>
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    @click="startRename(pk)"
+                  >
+                    Rename
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="text-destructive hover:text-destructive"
+                    :disabled="passkeyDeleting === pk.id"
+                    @click="onDeletePasskey(pk.id)"
+                  >
+                    <Loader2 v-if="passkeyDeleting === pk.id" class="mr-1 h-3 w-3 animate-spin" />
+                    Remove
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <p v-else class="text-sm text-muted-foreground">
+              No passkeys registered yet.
+            </p>
+
+            <!-- Rename dialog -->
+            <Dialog v-model:open="renameDialogOpen">
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Rename passkey</DialogTitle>
+                  <DialogDescription>
+                    Give this passkey a friendly name to help you identify it.
+                  </DialogDescription>
+                </DialogHeader>
+                <form class="space-y-4" novalidate @submit.prevent="onRenamePasskey">
+                  <div class="space-y-2">
+                    <Label for="passkeyName">Name</Label>
+                    <Input
+                      id="passkeyName"
+                      v-model="renameForm.deviceName"
+                      placeholder="e.g. MacBook Touch ID"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <DialogClose as-child>
+                      <Button variant="outline" type="button">Cancel</Button>
+                    </DialogClose>
+                    <Button type="submit" :disabled="renameSubmitting">
+                      <Loader2 v-if="renameSubmitting" class="mr-2 h-4 w-4 animate-spin" />
+                      Save
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+
+            <Alert v-if="passkeySuccess" class="border-primary/20 bg-primary/5">
+              <CheckCircle class="h-4 w-4 text-primary" />
+              <AlertDescription>{{ passkeySuccess }}</AlertDescription>
+            </Alert>
+            <Alert v-if="passkeyError" variant="destructive">
+              <AlertCircle class="h-4 w-4" />
+              <AlertDescription>{{ passkeyError }}</AlertDescription>
+            </Alert>
+
+            <Button :disabled="passkeyRegistering" @click="onRegisterPasskey">
+              <Loader2 v-if="passkeyRegistering" class="mr-2 h-4 w-4 animate-spin" />
+              <KeyRound v-else class="mr-2 h-4 w-4" />
+              Add a passkey
+            </Button>
+          </CardContent>
+        </Card>
+
         <!-- Danger Zone -->
         <Card class="border-destructive/30">
           <CardHeader>
@@ -178,7 +280,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, CheckCircle, Loader2 } from 'lucide-vue-next'
+import { AlertCircle, CheckCircle, KeyRound, Loader2 } from 'lucide-vue-next'
 import { changePasswordSchema, deleteAccountSchema } from '@paisa/shared'
 
 definePageMeta({
@@ -189,6 +291,7 @@ useHead({ title: 'Security Settings' })
 
 const { apiFetch, clearAuth } = useAuth()
 const { appConfig } = useFeatureFlags()
+const { registerPasskey, listPasskeys: fetchPasskeys, renamePasskey, deletePasskey } = usePasskey()
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // Change Password
@@ -244,6 +347,100 @@ async function onChangePassword() {
       || 'Failed to change password. Please check your current password.'
   } finally {
     passwordSubmitting.value = false
+  }
+}
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Passkeys
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+interface PasskeyInfo {
+  id: string
+  deviceName: string | null
+  createdAt: string
+}
+
+const passkeys = ref<PasskeyInfo[]>([])
+const passkeyRegistering = ref(false)
+const passkeyDeleting = ref<string | null>(null)
+const passkeyError = ref('')
+const passkeySuccess = ref('')
+
+// Rename dialog
+const renameDialogOpen = ref(false)
+const renameForm = reactive({ deviceName: '', passkeyId: '' })
+const renameSubmitting = ref(false)
+
+// Load passkeys on mount
+onMounted(async () => {
+  if (appConfig.value.auth.passkey) {
+    try {
+      passkeys.value = await fetchPasskeys()
+    } catch {
+      // Silently fail — passkeys list is not critical
+    }
+  }
+})
+
+async function onRegisterPasskey() {
+  passkeyRegistering.value = true
+  passkeyError.value = ''
+  passkeySuccess.value = ''
+
+  try {
+    const newPasskey = await registerPasskey()
+    passkeys.value.unshift(newPasskey)
+    passkeySuccess.value = 'Passkey registered successfully!'
+  } catch (error: any) {
+    // User cancelled the browser prompt
+    if (error?.name === 'NotAllowedError') {
+      passkeyError.value = 'Registration was cancelled.'
+    } else {
+      passkeyError.value =
+        error?.data?.error?.message
+        || error?.message
+        || 'Failed to register passkey. Please try again.'
+    }
+  } finally {
+    passkeyRegistering.value = false
+  }
+}
+
+function startRename(pk: PasskeyInfo) {
+  renameForm.passkeyId = pk.id
+  renameForm.deviceName = pk.deviceName || ''
+  renameDialogOpen.value = true
+}
+
+async function onRenamePasskey() {
+  if (!renameForm.deviceName.trim()) return
+
+  renameSubmitting.value = true
+  try {
+    await renamePasskey(renameForm.passkeyId, renameForm.deviceName.trim())
+    const pk = passkeys.value.find(p => p.id === renameForm.passkeyId)
+    if (pk) pk.deviceName = renameForm.deviceName.trim()
+    renameDialogOpen.value = false
+  } catch (error: any) {
+    passkeyError.value = error?.data?.error?.message || 'Failed to rename passkey.'
+  } finally {
+    renameSubmitting.value = false
+  }
+}
+
+async function onDeletePasskey(passkeyId: string) {
+  passkeyDeleting.value = passkeyId
+  passkeyError.value = ''
+  passkeySuccess.value = ''
+
+  try {
+    await deletePasskey(passkeyId)
+    passkeys.value = passkeys.value.filter(p => p.id !== passkeyId)
+    passkeySuccess.value = 'Passkey removed.'
+  } catch (error: any) {
+    passkeyError.value = error?.data?.error?.message || 'Failed to remove passkey.'
+  } finally {
+    passkeyDeleting.value = null
   }
 }
 

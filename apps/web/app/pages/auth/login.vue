@@ -74,6 +74,34 @@
         </Button>
       </form>
 
+      <!-- Passkey login (only when passkey auth is enabled) -->
+      <template v-if="appConfig.auth.passkey">
+        <div class="relative">
+          <div class="absolute inset-0 flex items-center">
+            <Separator />
+          </div>
+          <div class="relative flex justify-center text-xs uppercase">
+            <span class="bg-card px-2 text-muted-foreground">or</span>
+          </div>
+        </div>
+
+        <Alert v-if="passkeyError" variant="destructive">
+          <AlertCircle class="h-4 w-4" />
+          <AlertDescription>{{ passkeyError }}</AlertDescription>
+        </Alert>
+
+        <Button
+          variant="outline"
+          class="w-full"
+          :disabled="passkeyLoading"
+          @click="onPasskeyLogin"
+        >
+          <Loader2 v-if="passkeyLoading" class="mr-2 h-4 w-4 animate-spin" />
+          <KeyRound v-else class="mr-2 h-4 w-4" />
+          Sign in with passkey
+        </Button>
+      </template>
+
       <!-- Divider + Google OAuth (only when Google auth is enabled) -->
       <template v-if="appConfig.auth.google">
         <div class="relative">
@@ -103,7 +131,7 @@
 </template>
 
 <script setup lang="ts">
-import { AlertCircle, Loader2, Lock, Mail } from 'lucide-vue-next'
+import { AlertCircle, KeyRound, Loader2, Lock, Mail } from 'lucide-vue-next'
 import { loginSchema } from '@paisa/shared'
 
 definePageMeta({
@@ -162,6 +190,32 @@ async function onSubmit() {
       || 'Invalid email or password'
   } finally {
     submitting.value = false
+  }
+}
+
+// ─── Passkey login ───
+const { loginWithPasskey } = usePasskey()
+const passkeyLoading = ref(false)
+const passkeyError = ref('')
+
+async function onPasskeyLogin() {
+  passkeyLoading.value = true
+  passkeyError.value = ''
+
+  try {
+    await loginWithPasskey()
+    // loginWithPasskey() navigates to /dashboard on success
+  } catch (error: any) {
+    if (error?.name === 'NotAllowedError') {
+      passkeyError.value = 'Passkey sign-in was cancelled.'
+    } else {
+      passkeyError.value =
+        error?.data?.error?.message
+        || error?.message
+        || 'Passkey sign-in failed. Please try again.'
+    }
+  } finally {
+    passkeyLoading.value = false
   }
 }
 
