@@ -36,40 +36,29 @@
  * └───────────────────────────────────────────────────────────────┘
  * ```
  *
- * ## Verification & Reset Tokens (stored in DB)
+ * ## Verification & Reset Tokens
  *
- * Email verification and password reset tokens are stored in a
- * generic pattern:
+ * Email verification and password reset tokens follow a secure pattern:
  *
  * 1. Generate a random token (32 bytes → 64 hex chars)
  * 2. Hash it with SHA-256
- * 3. Store the hash + metadata (userId, type, expiry) in AuditLog
- *    (We reuse AuditLog for now — Phase 8 adds Redis for these)
+ * 3. Store the hash + metadata (userId, type, expiry) via TokenStore
  * 4. Send the RAW token to the user (via email link)
  * 5. When the user submits the token, hash it and look up the stored hash
  *
- * This way, even if the database is compromised, the stored hashes
+ * This way, even if the store is compromised, the stored hashes
  * can't be used to verify emails or reset passwords.
  *
- * ### Why not a dedicated VerificationToken table?
+ * Token storage is abstracted behind the TokenStore interface:
+ * - MemoryTokenStore: In-memory Map (single server, development)
+ * - RedisTokenStore: Redis-backed with automatic TTL (multi-server, production)
  *
- * We COULD create one, but these tokens are:
- * - Short-lived (1-24 hours)
- * - Used once and deleted
- * - Simple key-value data
- *
- * Using the User model's fields keeps it simple. We store:
- * - Email verification: token hash in a new DB field (we'll add this)
- * - Password reset: token hash in a new DB field (we'll add this)
- *
- * Actually, for now we'll use a simple in-memory Map for tokens.
- * This works for single-server deployments. Phase 8 (Redis) replaces
- * this with a proper distributed store.
- *
- * TODO: Replace in-memory token store with Redis in Phase 8
+ * The RedisModule provides the correct implementation based on the
+ * FEATURE_REDIS_ENABLED flag. AuthService doesn't know or care which one.
  */
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   UnauthorizedException,
@@ -78,42 +67,21 @@ import { randomBytes, createHash } from 'node:crypto';
 import { UserService } from '../user/user.service';
 import { TokenService, type TokenPair } from './token.service';
 import { EventBusService } from '../../common/event-bus/event-bus.service';
+import { TOKEN_STORE } from '../redis';
+import type { TokenStore, StoredToken } from '../redis';
 import { DOMAIN_EVENTS } from '@paisa/shared';
 import type { User } from '@paisa/db';
 import type { OAuthProfile } from '@paisa/shared';
-
-/**
- * In-memory token store for email verification and password reset.
- *
- * Structure: Map<hashedToken, { userId, type, expiresAt }>
- *
- * ⚠️  This does NOT survive server restarts. Fine for development
- * and single-server production. Replace with Redis in Phase 8 for
- * multi-server deployments.
- */
-interface StoredToken {
-  userId: string;
-  type: 'email_verification' | 'password_reset';
-  expiresAt: Date;
-}
 
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
 
-  /**
-   * In-memory store for verification/reset tokens.
-   * Key: SHA-256 hash of the raw token
-   * Value: { userId, type, expiresAt }
-   *
-   * Replaced by Redis in Phase 8.
-   */
-  private readonly tokenStore = new Map<string, StoredToken>();
-
   constructor(
     private readonly userService: UserService,
     private readonly tokenService: TokenService,
     private readonly eventBus: EventBusService,
+    @Inject(TOKEN_STORE) private readonly tokenStore: TokenStore,
   ) {}
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -156,13 +124,13 @@ export class AuthService {
     );
 
     // Generate email verification token
-    const verificationToken = this.createVerificationToken(
+    const verificationToken = await this.createVerificationToken(
       user.id,
       'email_verification',
       24 * 60 * 60 * 1000, // 24 hours
     );
 
-    // Emit event — email module will listen for this in Phase 4
+    // Emit event — email module sends the verification email
     // For now, it's a no-op (nobody is listening), but the event is emitted
     // so the architecture is ready.
     this.eventBus.emit(DOMAIN_EVENTS.USER_REGISTERED, {
@@ -281,7 +249,7 @@ export class AuthService {
    * 6. Emit user.verified_email event
    */
   async verifyEmail(token: string): Promise<User> {
-    const stored = this.validateAndConsumeToken(token, 'email_verification');
+    const stored = await this.validateAndConsumeToken(token, 'email_verification');
 
     const user = await this.userService.markEmailVerified(stored.userId);
 
@@ -308,7 +276,7 @@ export class AuthService {
       throw new ConflictException('Email is already verified');
     }
 
-    const verificationToken = this.createVerificationToken(
+    const verificationToken = await this.createVerificationToken(
       user.id,
       'email_verification',
       24 * 60 * 60 * 1000, // 24 hours
@@ -348,7 +316,7 @@ export class AuthService {
     }
 
     // Generate a password reset token (1 hour TTL)
-    const resetToken = this.createVerificationToken(
+    const resetToken = await this.createVerificationToken(
       user.id,
       'password_reset',
       60 * 60 * 1000, // 1 hour
@@ -375,7 +343,7 @@ export class AuthService {
    * 4. Emit user.password_changed event
    */
   async resetPassword(token: string, newPassword: string): Promise<void> {
-    const stored = this.validateAndConsumeToken(token, 'password_reset');
+    const stored = await this.validateAndConsumeToken(token, 'password_reset');
 
     // Look up the user so we can include email in the event payload.
     // The email module needs this to send the "password changed" notification
@@ -562,19 +530,19 @@ export class AuthService {
    * Returns the RAW token (to be sent to the user via email).
    * Stores the HASH in the token store (for later validation).
    */
-  private createVerificationToken(
+  private async createVerificationToken(
     userId: string,
     type: StoredToken['type'],
     ttlMs: number,
-  ): string {
+  ): Promise<string> {
     const rawToken = randomBytes(32).toString('hex');
     const hash = createHash('sha256').update(rawToken).digest('hex');
 
-    this.tokenStore.set(hash, {
-      userId,
-      type,
-      expiresAt: new Date(Date.now() + ttlMs),
-    });
+    await this.tokenStore.set(
+      hash,
+      { userId, type, expiresAt: new Date(Date.now() + ttlMs) },
+      ttlMs,
+    );
 
     return rawToken;
   }
@@ -583,12 +551,12 @@ export class AuthService {
    * Validate a token, check its type and expiry, and delete it (single-use).
    * Throws UnauthorizedException if invalid.
    */
-  private validateAndConsumeToken(
+  private async validateAndConsumeToken(
     rawToken: string,
     expectedType: StoredToken['type'],
-  ): StoredToken {
+  ): Promise<StoredToken> {
     const hash = createHash('sha256').update(rawToken).digest('hex');
-    const stored = this.tokenStore.get(hash);
+    const stored = await this.tokenStore.get(hash);
 
     if (!stored) {
       throw new UnauthorizedException('Invalid or expired token');
@@ -599,12 +567,12 @@ export class AuthService {
     }
 
     if (stored.expiresAt < new Date()) {
-      this.tokenStore.delete(hash);
+      await this.tokenStore.delete(hash);
       throw new UnauthorizedException('Token has expired');
     }
 
     // Consume the token (single-use)
-    this.tokenStore.delete(hash);
+    await this.tokenStore.delete(hash);
 
     return stored;
   }

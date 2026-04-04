@@ -47,15 +47,37 @@ const mockEventBus = {
   emit: vi.fn(),
 };
 
+// ── Mock TokenStore (email verification / password reset) ──
+const mockTokenStoreMap = new Map<string, any>();
+const mockTokenStore = {
+  set: vi.fn(async (hash: string, data: any) => {
+    mockTokenStoreMap.set(hash, data);
+  }),
+  get: vi.fn(async (hash: string) => {
+    const stored = mockTokenStoreMap.get(hash);
+    if (!stored) return undefined;
+    if (stored.expiresAt < new Date()) {
+      mockTokenStoreMap.delete(hash);
+      return undefined;
+    }
+    return stored;
+  }),
+  delete: vi.fn(async (hash: string) => {
+    mockTokenStoreMap.delete(hash);
+  }),
+};
+
 describe('AuthService', () => {
   let service: AuthService;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockTokenStoreMap.clear();
     service = new AuthService(
       mockUserService as any,
       mockTokenService as any,
       mockEventBus as any,
+      mockTokenStore as any,
     );
   });
 

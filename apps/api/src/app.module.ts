@@ -10,6 +10,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { EmailModule } from './modules/email/email.module';
 import { StorageModule } from './modules/storage/storage.module';
+import { RedisModule } from './modules/redis';
 import { StripeModule } from './modules/stripe/stripe.module';
 import { TestModule } from './test/test.module';
 
@@ -21,8 +22,8 @@ import { TestModule } from './test/test.module';
  * ## Module loading order
  *
  * 1. **Always loaded**: Config, Database, Logging, Health, EventBus
- * 2. **Always loaded**: Auth, User, Email, Storage (core domain modules)
- * 3. **Conditionally loaded**: Stripe, Cache, Queue, WebSocket, Sentry
+ * 2. **Always loaded**: Auth, User, Email, Storage, Redis (core domain modules)
+ * 3. **Conditionally loaded**: Stripe, Queue, WebSocket, Sentry
  *
  * ## How conditional loading works
  *
@@ -45,7 +46,6 @@ const features = parseFeatures(process.env);
 
 const optionalModules = [
   features.stripe.enabled && StripeModule.register(),
-  // features.redis.enabled     && CacheModule.register(),
   // features.rabbitmq.enabled  && QueueModule.register(),
   // features.websockets.enabled && WebsocketModule.register(),
   // features.sentry.enabled    && SentryModule.register(),
@@ -66,6 +66,7 @@ const optionalModules = [
     UserModule,
     EmailModule.register(),
     StorageModule.register(),
+    RedisModule.register(),
 
     // ─── Conditionally loaded (optional integrations) ───
     ...optionalModules,

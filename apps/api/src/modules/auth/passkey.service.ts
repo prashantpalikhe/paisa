@@ -15,9 +15,10 @@
  *
  * ## Challenge store
  *
- * Challenges are short-lived (60 seconds) and stored in memory.
- * They're single-use: consumed on verification.
- * TODO: Replace with Redis in Phase 8 for multi-server deployments.
+ * Challenges are short-lived (60 seconds) and single-use (consumed on verification).
+ * The ChallengeStore interface is injected by the RedisModule:
+ * - MemoryChallengeStore: In-memory Map (single server, development)
+ * - RedisChallengeStore: Redis-backed with automatic TTL (multi-server, production)
  *
  * ## Key concepts
  *
@@ -28,13 +29,12 @@
  * - **Transports**: How the authenticator communicates (usb, ble, nfc, internal)
  */
 import {
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   UnauthorizedException,
   BadRequestException,
-  OnModuleInit,
-  OnModuleDestroy,
 } from '@nestjs/common';
 import {
   generateRegistrationOptions,
@@ -50,31 +50,15 @@ import type {
 import { randomBytes } from 'node:crypto';
 import { DatabaseService } from '../../core/database/database.service';
 import { AppConfigService } from '../../core/config/config.service';
+import { CHALLENGE_STORE } from '../redis';
+import type { ChallengeStore } from '../redis';
 
-/**
- * In-memory challenge store.
- * Key: identifier (userId for registration, random for authentication)
- * Value: { challenge, expiresAt }
- *
- * Challenges expire after 60 seconds (WebAuthn best practice).
- */
-interface StoredChallenge {
-  challenge: string;
-  expiresAt: Date;
-}
-
-/** Maximum number of pending challenges to prevent memory exhaustion */
-const MAX_CHALLENGES = 10_000;
+/** Challenge TTL in milliseconds (60 seconds — WebAuthn best practice) */
+const CHALLENGE_TTL_MS = 60_000;
 
 @Injectable()
-export class PasskeyService implements OnModuleInit, OnModuleDestroy {
+export class PasskeyService {
   private readonly logger = new Logger(PasskeyService.name);
-
-  /** In-memory challenge store. Replaced by Redis in Phase 8. */
-  private readonly challengeStore = new Map<string, StoredChallenge>();
-
-  /** Periodic cleanup interval for expired challenges */
-  private cleanupInterval?: ReturnType<typeof setInterval>;
 
   /** WebAuthn Relying Party config — read from env vars */
   private readonly rpName: string;
@@ -84,24 +68,11 @@ export class PasskeyService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly db: DatabaseService,
     config: AppConfigService,
+    @Inject(CHALLENGE_STORE) private readonly challengeStore: ChallengeStore,
   ) {
     this.rpName = config.env.WEBAUTHN_RP_NAME;
     this.rpId = config.env.WEBAUTHN_RP_ID;
     this.origin = config.env.WEBAUTHN_ORIGIN;
-  }
-
-  onModuleInit() {
-    // Sweep expired challenges every 60 seconds
-    this.cleanupInterval = setInterval(() => {
-      const now = new Date();
-      for (const [key, stored] of this.challengeStore) {
-        if (stored.expiresAt < now) this.challengeStore.delete(key);
-      }
-    }, 60_000);
-  }
-
-  onModuleDestroy() {
-    if (this.cleanupInterval) clearInterval(this.cleanupInterval);
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -149,7 +120,7 @@ export class PasskeyService implements OnModuleInit, OnModuleDestroy {
     });
 
     // Store the challenge for verification (Step 2)
-    this.storeChallenge(`reg:${userId}`, options.challenge);
+    await this.storeChallenge(`reg:${userId}`, options.challenge);
 
     return options;
   }
@@ -170,7 +141,7 @@ export class PasskeyService implements OnModuleInit, OnModuleDestroy {
     deviceName?: string,
   ) {
     // Retrieve and consume the stored challenge
-    const expectedChallenge = this.consumeChallenge(`reg:${userId}`);
+    const expectedChallenge = await this.consumeChallenge(`reg:${userId}`);
 
     const verification = await verifyRegistrationResponse({
       response,
@@ -235,7 +206,7 @@ export class PasskeyService implements OnModuleInit, OnModuleDestroy {
     // look up the expected challenge. The ID itself is not a secret —
     // security comes from the authenticator's private key signature.
     const sessionId = randomBytes(16).toString('hex');
-    this.storeChallenge(`auth:${sessionId}`, options.challenge);
+    await this.storeChallenge(`auth:${sessionId}`, options.challenge);
 
     return { ...options, sessionId };
   }
@@ -273,7 +244,7 @@ export class PasskeyService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Consume the stored challenge using the opaque session ID
-    const expectedChallenge = this.consumeChallenge(`auth:${sessionId}`);
+    const expectedChallenge = await this.consumeChallenge(`auth:${sessionId}`);
 
     const verification = await verifyAuthenticationResponse({
       response,
@@ -359,47 +330,26 @@ export class PasskeyService implements OnModuleInit, OnModuleDestroy {
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // PRIVATE: Challenge store
+  // PRIVATE: Challenge store helpers
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  private storeChallenge(key: string, challenge: string): void {
-    // Prevent memory exhaustion from abuse of public endpoints
-    if (this.challengeStore.size >= MAX_CHALLENGES) {
-      // Evict oldest entries first
-      const iterator = this.challengeStore.keys();
-      for (let i = 0; i < 100; i++) {
-        const oldest = iterator.next();
-        if (oldest.done) break;
-        this.challengeStore.delete(oldest.value);
-      }
-    }
-
-    this.challengeStore.set(key, {
-      challenge,
-      expiresAt: new Date(Date.now() + 60_000), // 60 seconds
-    });
+  private async storeChallenge(key: string, challenge: string): Promise<void> {
+    await this.challengeStore.set(key, challenge, CHALLENGE_TTL_MS);
   }
 
-  private consumeChallenge(key: string): string {
-    const stored = this.challengeStore.get(key);
+  private async consumeChallenge(key: string): Promise<string> {
+    const challenge = await this.challengeStore.get(key);
 
-    if (!stored) {
+    if (!challenge) {
       throw new UnauthorizedException(
         'Challenge not found or expired. Please start the process again.',
       );
     }
 
-    if (stored.expiresAt < new Date()) {
-      this.challengeStore.delete(key);
-      throw new UnauthorizedException(
-        'Challenge expired. Please start the process again.',
-      );
-    }
-
     // Single-use: delete after consumption
-    this.challengeStore.delete(key);
+    await this.challengeStore.delete(key);
 
-    return stored.challenge;
+    return challenge;
   }
 
   /** Generate a human-friendly device name from credential metadata */
