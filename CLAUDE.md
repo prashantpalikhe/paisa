@@ -98,6 +98,11 @@ NEVER add middleware directly in `main.ts` — add it to `configureApp()`.
 - **Frontend e2e tests** (`e2e/tests/**/*.spec.ts`): Playwright + real browser + real API + real DB, run with `pnpm test:e2e:web`
 - Factories in `test/factories/` — use these, don't write raw `prisma.create()`
 - Every API e2e test file: `beforeEach(() => resetDatabase(prisma))`
+- Stripe SDK is mocked in all tests (unit and e2e) — never hits real Stripe
+- Stripe unit tests: direct constructor instantiation with `vi.fn()` mocks (no NestJS TestingModule)
+- Stripe e2e tests: `createTestApp({ customize })` with `overrideProvider(STRIPE_CLIENT).useValue(mockStripe)`
+- `.env.test` has `FEATURE_STRIPE_ENABLED=true` with fake keys so the module loads in e2e
+- Test factories: `createProduct`, `createPlan`, `createSubscription`, `createPayment`, `createStripeCustomer`
 
 ### Frontend Playwright e2e tests
 - Config: `e2e/playwright.config.ts` — starts both API (port 3001) and Nuxt (port 3000) automatically
@@ -202,6 +207,48 @@ API docs title, email templates, and frontend theme all read from this config.
   - `r2`: R2StorageProvider — uploads to Cloudflare R2 via S3 SDK (requires R2 credentials)
 - Conditional module loading: `AppModule` computes `optionalModules` array at module-evaluation time using `parseFeatures(process.env)` for Stripe, Redis, RabbitMQ, WebSockets, Sentry
 
+### Stripe Payments & Subscriptions
+- Feature-flagged via `FEATURE_STRIPE_ENABLED` (default: false). Conditionally loaded in `AppModule` via `parseFeatures(process.env)`.
+- Webhook-first architecture: subscriptions and payments are only created by webhook handlers, never by success page redirect. The checkout success page simply confirms — it never writes to DB.
+- Stripe Checkout (hosted): redirect users to Stripe-hosted payment page, no PCI compliance needed on our side.
+- Lazy customer creation: Stripe Customer is created at first checkout, not at user registration.
+- Database = catalog (products/plans power the pricing page), Stripe = payments (all money handling).
+- `stripe-types.ts`: Stripe SDK v22 CJS exports a constructor, not a class. Our type helper re-exports the `Stripe` class type from `stripe/cjs/stripe.core.js`. All services use `import type { Stripe } from '../stripe-types'`.
+- API version pinned to `2026-03-25.dahlia` (SDK v22). In this version: `current_period_start/end` moved to SubscriptionItem, `invoice.subscription` replaced with `invoice.parent.subscription_details.subscription`.
+- Raw body middleware in `configure-app.ts` for webhook signature verification (Express JSON middleware destroys raw bytes).
+- Cross-module communication via EventBus (emits SUBSCRIPTION_CREATED, SUBSCRIPTION_CANCELED, PAYMENT_SUCCEEDED, etc.).
+- DynamicModule pattern: `StripeModule.register()` follows same pattern as `StorageModule.register()`.
+- Endpoints:
+  ```
+  GET  /stripe/pricing              → Public pricing page data
+  POST /stripe/checkout             → Create Checkout Session (→ redirect URL)
+  GET  /stripe/subscription         → Get active subscription
+  GET  /stripe/purchases            → All subscriptions + payments
+  POST /stripe/subscription/cancel  → Cancel at period end
+  POST /stripe/subscription/resume  → Resume pending cancellation
+  POST /stripe/portal               → Stripe Billing Portal (→ redirect URL)
+  POST /stripe/webhooks             → Stripe webhook receiver (signature verified)
+  ```
+- **Setup guide** (when forking the boilerplate):
+  1. Create a Stripe account at [dashboard.stripe.com](https://dashboard.stripe.com)
+  2. Get your test API keys from Developers → API Keys
+  3. Set up a webhook endpoint (Developers → Webhooks):
+     - URL: `https://your-api.com/stripe/webhooks`
+     - Events: `checkout.session.completed`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`
+  4. Add to `.env`:
+     ```
+     FEATURE_STRIPE_ENABLED=true
+     STRIPE_SECRET_KEY=sk_test_xxx
+     STRIPE_WEBHOOK_SECRET=whsec_xxx
+     STRIPE_PUBLISHABLE_KEY=pk_test_xxx
+     ```
+  5. Create products and plans in Stripe Dashboard or via seed script
+  6. Run database seed: `pnpm --filter @paisa/db db:seed`
+  7. For local development: use Stripe CLI to forward webhooks:
+     ```
+     stripe listen --forward-to localhost:3001/stripe/webhooks
+     ```
+
 ### Nuxt Frontend (apps/web)
 - Nuxt 4.4+ with native `app/` directory structure
 - shadcn-vue for UI components (not Nuxt UI). Components live in `app/components/ui/`.
@@ -217,6 +264,11 @@ API docs title, email templates, and frontend theme all read from this config.
   - `usePasskey()` composable: wraps `@simplewebauthn/browser` for passkey registration, login, list, rename, delete. Exports `PasskeyInfo` type (auto-imported by Nuxt).
 - Zod schemas from `@paisa/shared` used for both client-side validation and API validation.
 - `cn()` utility in `app/lib/utils.ts` for merging Tailwind classes (clsx + tailwind-merge).
+- Billing: `useBilling()` composable wraps all Stripe interactions — pricing, subscription, checkout, cancel, resume, portal redirect.
+  - Pricing page (`/pricing`): public route, feature-flag gated via `useFeatureFlags()`. Fetches products/plans from `GET /stripe/pricing`.
+  - Billing settings (`/settings/billing`): authenticated, shows active subscription with cancel/resume, portal link, purchase history.
+  - Checkout success/cancel pages handle redirect back from Stripe Checkout.
+  - `SettingsNav` conditionally shows Billing link when `stripe` feature flag is enabled.
 
 ## Documentation
 
@@ -262,3 +314,8 @@ API docs title, email templates, and frontend theme all read from this config.
 - **WebAuthn challenge store is in-memory**: Same limitation as email tokens. Won't work across multiple server instances. Phase 8 → Redis.
 - **Passkey e2e tests can't test full ceremonies**: WebAuthn requires a browser authenticator. E2e tests cover CRUD, auth requirements, and feature flag gating but not the actual crypto verification flow (tested by @simplewebauthn/server internally).
 - **`@simplewebauthn/server` + `@simplewebauthn/browser`**: Must stay version-aligned. Currently both at v13. The server package validates credential formats strictly (e.g., credentialId must be valid base64url).
+- **Stripe SDK v22 CJS types**: `import Stripe from 'stripe'` gives `StripeConstructor` (a function), not the `Stripe` class. Use `import type { Stripe } from '../stripe-types'` for type annotations. Only use `import StripeSDK from 'stripe'` in `stripe.module.ts` for the runtime constructor.
+- **Stripe API 2026-03-25.dahlia breaking changes**: `current_period_start/end` moved from Subscription to SubscriptionItem. `invoice.subscription` removed, use `invoice.parent?.subscription_details?.subscription`.
+- **Raw body for webhooks**: Express JSON middleware destroys raw bytes needed for Stripe signature verification. Custom middleware in `configure-app.ts` captures Buffer to `req.rawBody` before JSON parsing.
+- **Webhook idempotency**: All Stripe webhook handlers use Prisma `upsert` — safe against Stripe retries.
+- **E2e Stripe module loading**: `AppModule` evaluates `parseFeatures(process.env)` at import time. `.env.test` must set `FEATURE_STRIPE_ENABLED=true` so the module loads. Provider override via `createTestApp({ customize })` replaces the SDK with a mock.

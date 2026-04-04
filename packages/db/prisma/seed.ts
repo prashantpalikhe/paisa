@@ -3,7 +3,7 @@
  *
  * Creates initial data for development:
  * - Admin user (no password — set via auth module or API)
- * - Sample product with monthly/yearly plans
+ * - Starter and Pro products with monthly/yearly plans
  * - Feature flags for maintenance mode and beta signups
  *
  * ## Usage
@@ -72,59 +72,137 @@ async function main() {
 
   console.log(`  ✓ Admin user: ${adminUser.email} (${adminUser.id})`);
 
-  // ─── Sample product + plans ───
-  const product = await prisma.product.upsert({
-    where: { id: 'sample-product' },
+  // ─── Products + plans ───
+
+  // Product 1: Starter
+  const starterProduct = await prisma.product.upsert({
+    where: { id: 'seed-product-starter' },
     update: {},
     create: {
-      id: 'sample-product',
-      name: 'Pro Plan',
-      description: 'Full access to all features',
+      id: 'seed-product-starter',
+      name: 'Starter',
+      description: 'Everything you need to get started',
       active: true,
-      sortOrder: 0,
+      stripeProductId: 'prod_seed_starter',
+      sortOrder: 1,
     },
   });
 
-  console.log(`  ✓ Product: ${product.name} (${product.id})`);
+  console.log(`  ✓ Product: ${starterProduct.name} (${starterProduct.id})`);
 
-  const monthlyPlan = await prisma.plan.upsert({
-    where: { stripePriceId: 'price_sample_monthly' },
+  const starterFeatures = [
+    'Up to 3 projects',
+    'Basic analytics',
+    'Email support',
+  ];
+
+  const starterMonthly = await prisma.plan.upsert({
+    where: { stripePriceId: 'price_seed_starter_monthly' },
     update: {},
     create: {
-      productId: product.id,
+      productId: starterProduct.id,
+      id: 'seed-plan-starter-monthly',
       name: 'Monthly',
-      stripePriceId: 'price_sample_monthly',
-      priceInCents: 999,
+      stripePriceId: 'price_seed_starter_monthly',
+      priceInCents: 900,
       currency: 'usd',
       interval: 'month',
       intervalCount: 1,
-      features: ['All features', 'Priority support', 'No ads'],
-      highlighted: true,
+      features: starterFeatures,
+      highlighted: false,
       active: true,
       sortOrder: 0,
     },
   });
 
-  const yearlyPlan = await prisma.plan.upsert({
-    where: { stripePriceId: 'price_sample_yearly' },
+  const starterYearly = await prisma.plan.upsert({
+    where: { stripePriceId: 'price_seed_starter_yearly' },
     update: {},
     create: {
-      productId: product.id,
+      productId: starterProduct.id,
+      id: 'seed-plan-starter-yearly',
       name: 'Yearly',
-      stripePriceId: 'price_sample_yearly',
-      priceInCents: 9990,
+      stripePriceId: 'price_seed_starter_yearly',
+      priceInCents: 9000,
       currency: 'usd',
       interval: 'year',
       intervalCount: 1,
-      trialDays: 14,
-      features: ['All features', 'Priority support', 'No ads', '2 months free'],
+      features: starterFeatures,
       highlighted: false,
       active: true,
       sortOrder: 1,
     },
   });
 
-  console.log(`  ✓ Plans: ${monthlyPlan.name}, ${yearlyPlan.name}`);
+  console.log(
+    `  ✓ Starter plans: ${starterMonthly.name} ($9/mo), ${starterYearly.name} ($90/yr)`,
+  );
+
+  // Product 2: Pro
+  const proProduct = await prisma.product.upsert({
+    where: { id: 'seed-product-pro' },
+    update: {},
+    create: {
+      id: 'seed-product-pro',
+      name: 'Pro',
+      description: 'For growing teams and businesses',
+      active: true,
+      stripeProductId: 'prod_seed_pro',
+      sortOrder: 2,
+    },
+  });
+
+  console.log(`  ✓ Product: ${proProduct.name} (${proProduct.id})`);
+
+  const proFeatures = [
+    'Unlimited projects',
+    'Advanced analytics',
+    'Priority support',
+    'API access',
+    'Custom integrations',
+  ];
+
+  const proMonthly = await prisma.plan.upsert({
+    where: { stripePriceId: 'price_seed_pro_monthly' },
+    update: {},
+    create: {
+      productId: proProduct.id,
+      id: 'seed-plan-pro-monthly',
+      name: 'Monthly',
+      stripePriceId: 'price_seed_pro_monthly',
+      priceInCents: 2900,
+      currency: 'usd',
+      interval: 'month',
+      intervalCount: 1,
+      features: proFeatures,
+      highlighted: false,
+      active: true,
+      sortOrder: 0,
+    },
+  });
+
+  const proYearly = await prisma.plan.upsert({
+    where: { stripePriceId: 'price_seed_pro_yearly' },
+    update: {},
+    create: {
+      productId: proProduct.id,
+      id: 'seed-plan-pro-yearly',
+      name: 'Yearly',
+      stripePriceId: 'price_seed_pro_yearly',
+      priceInCents: 29000,
+      currency: 'usd',
+      interval: 'year',
+      intervalCount: 1,
+      features: proFeatures,
+      highlighted: true,
+      active: true,
+      sortOrder: 1,
+    },
+  });
+
+  console.log(
+    `  ✓ Pro plans: ${proMonthly.name} ($29/mo), ${proYearly.name} ($290/yr)`,
+  );
 
   // ─── Sample business feature flags ───
   const flags = [
