@@ -11,6 +11,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "stripe:sync": "tsx prisma/stripe-sync.ts",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
     "typecheck": "tsc --noEmit",
@@ -20,7 +21,8 @@
   },
   "dependencies": {
     "@prisma/client": "^7.6.0",
-    "dotenv": "^17.4.0"
+    "dotenv": "^17.4.0",
+    "stripe": "^22.0.0"
   },
   "devDependencies": {
     "prisma": "^7.6.0",
