@@ -4,6 +4,7 @@ import { CoreConfigModule } from './core/config/config.module';
 import { DatabaseModule } from './core/database/database.module';
 import { LoggingModule } from './core/logging/logging.module';
 import { HealthModule } from './core/health/health.module';
+import { ThrottleModule } from './core/throttle';
 import { EventBusModule } from './common/event-bus/event-bus.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
@@ -58,6 +59,7 @@ const optionalModules = [
     DatabaseModule,
     EventBusModule,
     HealthModule,
+    ThrottleModule,
 
     // ─── Always loaded (core domain) ───
     AuthModule,

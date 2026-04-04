@@ -44,6 +44,7 @@ import { STRIPE_CLIENT } from '../stripe.constants';
 import { StripeWebhookService } from '../services/stripe-webhook.service';
 import { AppConfigService } from '../../../core/config/config.service';
 import { Public } from '../../../common/decorators/public.decorator';
+import { SkipThrottle } from '@nestjs/throttler';
 
 @ApiTags('Stripe')
 @Controller('stripe')
@@ -66,6 +67,7 @@ export class StripeWebhookController {
    * only called by Stripe, not by frontend developers.
    */
   @Public()
+  @SkipThrottle()
   @Post('webhooks')
   @HttpCode(HttpStatus.OK)
   @ApiExcludeEndpoint()

@@ -45,6 +45,7 @@ import {
   passkeyRenameSchema,
 } from '@paisa/shared';
 import { Public } from '../../common/decorators/public.decorator';
+import { StrictThrottle } from '../../core/throttle';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { PasskeyService } from './passkey.service';
@@ -120,6 +121,7 @@ export class PasskeyController {
    * without knowing who the user is upfront.
    */
   @Public()
+  @StrictThrottle()
   @Post('login/options')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Get passkey authentication options' })
@@ -135,6 +137,7 @@ export class PasskeyController {
    * Returns access token + sets refresh cookie (same as email/password login).
    */
   @Public()
+  @StrictThrottle()
   @Post('login/verify')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify passkey and login' })

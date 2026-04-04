@@ -64,6 +64,7 @@ import {
   setPasswordSchema,
 } from '@paisa/shared';
 import { Public } from '../../common/decorators/public.decorator';
+import { StrictThrottle } from '../../core/throttle';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AppConfigService } from '../../core/config/config.service';
 import { AuthService } from './auth.service';
@@ -116,6 +117,7 @@ export class AuthController {
    * - Emits user.registered event (email sent in Phase 4)
    */
   @Public()
+  @StrictThrottle()
   @Post('register')
   @ApiOperation({ summary: 'Register a new account' })
   @ApiBody({ type: RegisterDto })
@@ -157,6 +159,7 @@ export class AuthController {
    * Passport's LocalStrategy handles the validation.
    */
   @Public()
+  @StrictThrottle()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard('local'))
@@ -229,6 +232,7 @@ export class AuthController {
    * email enumeration attacks.
    */
   @Public()
+  @StrictThrottle()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request a password reset email' })
@@ -245,6 +249,7 @@ export class AuthController {
    * Reset password using the token from the reset email.
    */
   @Public()
+  @StrictThrottle()
   @Post('reset-password')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reset password with token from email' })
@@ -451,6 +456,7 @@ export class AuthController {
   /**
    * Resend email verification.
    */
+  @StrictThrottle()
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
