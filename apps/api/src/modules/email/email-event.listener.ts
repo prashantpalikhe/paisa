@@ -91,7 +91,7 @@ export class EmailEventListener {
     }
 
     try {
-      const verifyUrl = `${this.frontendUrl}/verify-email?token=${payload.verificationToken}`;
+      const verifyUrl = `${this.frontendUrl}/auth/verify-email?token=${payload.verificationToken}`;
       const email = welcomeEmail(payload.name, verifyUrl);
 
       await this.emailProvider.send({
@@ -113,7 +113,7 @@ export class EmailEventListener {
   @OnEvent(DOMAIN_EVENTS.USER_VERIFICATION_RESENT)
   async onVerificationResent(payload: UserVerificationResentPayload): Promise<void> {
     try {
-      const verifyUrl = `${this.frontendUrl}/verify-email?token=${payload.verificationToken}`;
+      const verifyUrl = `${this.frontendUrl}/auth/verify-email?token=${payload.verificationToken}`;
       const email = verifyEmail(payload.name, verifyUrl);
 
       await this.emailProvider.send({
@@ -156,7 +156,7 @@ export class EmailEventListener {
   @OnEvent(DOMAIN_EVENTS.USER_PASSWORD_RESET_REQUESTED)
   async onPasswordResetRequested(payload: UserPasswordResetRequestedPayload): Promise<void> {
     try {
-      const resetUrl = `${this.frontendUrl}/reset-password?token=${payload.resetToken}`;
+      const resetUrl = `${this.frontendUrl}/auth/reset-password?token=${payload.resetToken}`;
       const email = passwordResetEmail(payload.name, resetUrl);
 
       await this.emailProvider.send({

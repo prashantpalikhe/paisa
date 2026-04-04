@@ -46,8 +46,8 @@ describe('EmailEventListener', () => {
       expect.objectContaining({
         to: 'new@example.com',
         subject: expect.stringContaining('Welcome'),
-        html: expect.stringContaining('https://app.test/verify-email?token=abc123'),
-        text: expect.stringContaining('https://app.test/verify-email?token=abc123'),
+        html: expect.stringContaining('https://app.test/auth/verify-email?token=abc123'),
+        text: expect.stringContaining('https://app.test/auth/verify-email?token=abc123'),
       }),
     );
   });
@@ -88,7 +88,7 @@ describe('EmailEventListener', () => {
     expect(mockProvider.send).toHaveBeenCalledWith(
       expect.objectContaining({
         to: 'user@example.com',
-        html: expect.stringContaining('https://app.test/verify-email?token=xyz789'),
+        html: expect.stringContaining('https://app.test/auth/verify-email?token=xyz789'),
       }),
     );
   });
@@ -127,7 +127,7 @@ describe('EmailEventListener', () => {
       expect.objectContaining({
         to: 'user@example.com',
         subject: expect.stringContaining('Reset'),
-        html: expect.stringContaining('https://app.test/reset-password?token=reset123'),
+        html: expect.stringContaining('https://app.test/auth/reset-password?token=reset123'),
       }),
     );
   });
