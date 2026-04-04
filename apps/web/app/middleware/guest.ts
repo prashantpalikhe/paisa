@@ -16,9 +16,6 @@
  * This prevents a logged-in user from seeing the login form.
  */
 export default defineNuxtRouteMiddleware(async () => {
-  // Only run on the client — SSR doesn't have auth state
-  if (import.meta.server) return
-
   const { isAuthenticated, isLoading } = useAuth()
 
   // Wait for auth to resolve (same pattern as auth middleware)

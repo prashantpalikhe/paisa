@@ -18,15 +18,12 @@
  *
  * ## Why wait for isLoading?
  *
- * On page refresh, the auth.client.ts plugin is restoring the session
- * from the httpOnly cookie. During that time, `isAuthenticated` is false
- * even if the user has a valid session. Without waiting, we'd incorrectly
+ * On page refresh, the auth plugin is restoring the session from the
+ * httpOnly cookie. During that time, `isAuthenticated` is false even if
+ * the user has a valid session. Without waiting, we'd incorrectly
  * redirect logged-in users to the login page on every refresh.
  */
 export default defineNuxtRouteMiddleware(async () => {
-  // Only run on the client — SSR doesn't have auth state
-  if (import.meta.server) return
-
   const { isAuthenticated, isLoading } = useAuth()
 
   // Wait for the auth plugin to finish restoring the session.

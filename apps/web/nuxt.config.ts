@@ -7,8 +7,8 @@
  * - `shadcn-nuxt` — auto-imports shadcn-vue components from `app/components/ui`
  * - `@tailwindcss/vite` — Tailwind CSS v4 uses a Vite plugin (not PostCSS)
  * - `runtimeConfig.public.apiBaseUrl` — overridden by NUXT_PUBLIC_API_BASE_URL env var
- * - `ssr: true` — SSR is on, but auth state is client-side only.
- *   Protected pages render a loading state until the client hydrates.
+ * - `ssr: false` — SPA mode. No server-side rendering.
+ *   Auth state, feature flags, and all data fetching happen client-side.
  *
  * ## Why not @nuxtjs/tailwindcss?
  *
@@ -20,6 +20,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-04-03',
+  ssr: false,
 
   // ─── Modules ───
   modules: ['shadcn-nuxt'],

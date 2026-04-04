@@ -60,9 +60,7 @@ onMounted(async () => {
 
   // ─── Clean up URL ───
   // Remove token from URL so it's not in browser history
-  if (import.meta.client) {
-    window.history.replaceState({}, '', '/auth/callback')
-  }
+  window.history.replaceState({}, '', '/auth/callback')
 
   // ─── Fetch user profile ───
   statusMessage.value = 'Loading your account...'
