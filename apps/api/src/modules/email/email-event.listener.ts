@@ -57,7 +57,7 @@ export class EmailEventListener {
 
   constructor(
     @Inject(EMAIL_PROVIDER) private readonly emailProvider: EmailProvider,
-    private readonly config: AppConfigService,
+    config: AppConfigService,
   ) {
     this.frontendUrl = config.env.FRONTEND_URL;
   }

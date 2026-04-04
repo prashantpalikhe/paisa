@@ -4,7 +4,7 @@
  * Tests that the guard checks the feature flag before delegating
  * to Passport's AuthGuard('google').
  */
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
 import { GoogleOAuthGuard } from './google-oauth.guard';
 

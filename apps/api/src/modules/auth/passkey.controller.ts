@@ -54,6 +54,7 @@ import { PasskeyGuard } from './guards/passkey.guard';
 import { AppConfigService } from '../../core/config/config.service';
 import { setRefreshCookie, toAuthUser } from './auth.helpers';
 import type { AuthUser } from '@paisa/shared';
+import type { RegistrationResponseJSON, AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 @ApiTags('Passkey')
 @UseGuards(PasskeyGuard)
@@ -98,7 +99,7 @@ export class PasskeyController {
   async verifyRegistration(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(passkeyRegistrationSchema))
-    body: { response: Record<string, unknown>; deviceName?: string },
+    body: { response: RegistrationResponseJSON; deviceName?: string },
   ) {
     return this.passkeyService.verifyRegistration(
       user.id,
@@ -145,7 +146,7 @@ export class PasskeyController {
   @ApiResponse({ status: 401, description: 'Passkey not recognized or verification failed' })
   async verifyAuthentication(
     @Body(new ZodValidationPipe(passkeyAuthenticationSchema))
-    body: { response: Record<string, unknown>; sessionId: string },
+    body: { response: AuthenticationResponseJSON; sessionId: string },
     @Req() req: Request,
     @Res({ passthrough: true }) res: Response,
   ) {

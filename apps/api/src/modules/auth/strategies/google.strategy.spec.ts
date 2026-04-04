@@ -33,7 +33,7 @@ function makeGoogleProfile(overrides: Partial<Profile> = {}): Profile {
   return {
     id: 'google-123',
     displayName: 'Test User',
-    emails: [{ value: 'test@gmail.com', verified: 'true' }],
+    emails: [{ value: 'test@gmail.com', verified: true }],
     photos: [{ value: 'https://lh3.googleusercontent.com/photo.jpg' }],
     provider: 'google',
     profileUrl: '',

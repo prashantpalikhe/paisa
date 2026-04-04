@@ -39,7 +39,7 @@ export class StripeSubscriptionService {
    * A user can only have one active subscription per product (enforced
    * at checkout time), but could have subscriptions to different products.
    */
-  async getActiveSubscription(userId: string) {
+  async getActiveSubscription(userId: string): Promise<any> {
     return this.db.subscription.findFirst({
       where: {
         userId,
@@ -58,7 +58,7 @@ export class StripeSubscriptionService {
    * Get all subscriptions for a user (including canceled ones).
    * Useful for showing subscription history.
    */
-  async getAllSubscriptions(userId: string) {
+  async getAllSubscriptions(userId: string): Promise<any[]> {
     return this.db.subscription.findMany({
       where: { userId },
       include: {
@@ -73,7 +73,7 @@ export class StripeSubscriptionService {
   /**
    * Get all one-time payments for a user.
    */
-  async getPayments(userId: string) {
+  async getPayments(userId: string): Promise<any[]> {
     return this.db.payment.findMany({
       where: { userId },
       include: {

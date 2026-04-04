@@ -337,7 +337,7 @@ export class AuthController {
     const frontendUrl = this.config.env.FRONTEND_URL;
 
     try {
-      const { user, tokenPair } = req.user;
+      const { tokenPair } = req.user;
 
       // Set refresh token as httpOnly cookie (same as login/register)
       setRefreshCookie(res, tokenPair.refreshToken, this.config);

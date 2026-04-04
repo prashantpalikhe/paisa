@@ -45,7 +45,7 @@ export class StripeSubscriptionController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get your active subscription' })
   @ApiResponse({ status: 200, description: 'Active subscription or null' })
-  async getSubscription(@CurrentUser() user: AuthUser) {
+  async getSubscription(@CurrentUser() user: AuthUser): Promise<any> {
     const subscription = await this.subscriptionService.getActiveSubscription(user.id);
     return subscription ?? null;
   }
@@ -58,7 +58,7 @@ export class StripeSubscriptionController {
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get all your purchases' })
   @ApiResponse({ status: 200, description: 'All subscriptions and payments' })
-  async getPurchases(@CurrentUser() user: AuthUser) {
+  async getPurchases(@CurrentUser() user: AuthUser): Promise<{ subscriptions: any[]; payments: any[] }> {
     const [subscriptions, payments] = await Promise.all([
       this.subscriptionService.getAllSubscriptions(user.id),
       this.subscriptionService.getPayments(user.id),

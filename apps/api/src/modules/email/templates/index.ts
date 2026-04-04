@@ -126,7 +126,7 @@ export function verifyEmail(name: string | null, verifyUrl: string): EmailConten
  * Email verified — confirmation that their email was verified.
  * Short and sweet — just a confirmation.
  */
-export function emailVerifiedEmail(email: string): EmailContent {
+export function emailVerifiedEmail(_email: string): EmailContent {
   return {
     subject: `Email verified — ${brand.name}`,
     html: baseLayout({

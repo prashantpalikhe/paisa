@@ -49,7 +49,7 @@ const optionalModules = [
   // features.rabbitmq.enabled  && QueueModule.register(),
   // features.websockets.enabled && WebsocketModule.register(),
   // features.sentry.enabled    && SentryModule.register(),
-].filter(Boolean);
+].filter(Boolean) as import('@nestjs/common').DynamicModule[];
 
 @Module({
   imports: [
@@ -72,7 +72,7 @@ const optionalModules = [
     ...optionalModules,
 
     // ─── Test-only module (database reset, email inbox for Playwright) ───
-    ...(process.env.NODE_ENV === 'test' ? [TestModule] : []),
+    ...(process.env.NODE_ENV === 'test' ? [TestModule] as const : ([] as const)),
   ],
 })
 export class AppModule {}

@@ -97,7 +97,7 @@ export function useAuth() {
   const apiBase = config.public.apiBaseUrl as string
 
   /** Make an API call with credentials (sends httpOnly cookie) */
-  async function apiFetch<T>(url: string, options: RequestInit = {}): Promise<T> {
+  async function apiFetch<T>(url: string, options: Record<string, any> = {}): Promise<T> {
     const response = await $fetch<{ data: T }>(url, {
       baseURL: apiBase,
       credentials: 'include',

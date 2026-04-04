@@ -29,7 +29,7 @@ export class StripePricingController {
   @Get('pricing')
   @ApiOperation({ summary: 'Get active products and plans for pricing page' })
   @ApiResponse({ status: 200, description: 'List of products with plans' })
-  async getPricing() {
+  async getPricing(): Promise<{ id: string; name: string; description: string | null; plans: any[] }[]> {
     const products = await this.db.product.findMany({
       where: { active: true },
       include: {

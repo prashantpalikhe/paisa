@@ -27,6 +27,7 @@ const mockUserService = {
   verifyPassword: vi.fn(),
   updatePassword: vi.fn(),
   markEmailVerified: vi.fn(),
+  findOrCreateOAuthUser: vi.fn(),
 };
 
 // ── Mock TokenService ──

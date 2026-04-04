@@ -68,7 +68,7 @@ export interface GoogleOAuthResult {
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(
-    private readonly config: AppConfigService,
+    config: AppConfigService,
     private readonly authService: AuthService,
   ) {
     const googleConfig = config.features.auth.google;
