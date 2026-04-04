@@ -34,7 +34,6 @@ COPY apps/web/package.json ./apps/web/
 COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
-COPY packages/email-templates/package.json ./packages/email-templates/
 
 RUN pnpm install --frozen-lockfile
 
