@@ -34,7 +34,9 @@ COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
 
 # Install all dependencies (including dev — needed for build step)
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts: prisma generate runs in postinstall but schema isn't
+# copied yet. We run prisma generate explicitly in the build stage.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Stage 3: Build ───────────────────────────────────────────────────────────
 FROM deps AS build
@@ -45,7 +47,9 @@ COPY apps/api/ ./apps/api/
 COPY tsconfig.base.json ./
 
 # Generate Prisma client (needs schema + prisma.config.ts)
-RUN pnpm --filter @paisa/db exec prisma generate
+# Dummy DATABASE_URL — generate only reads the schema, doesn't connect
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" \
+    pnpm --filter @paisa/db exec prisma generate
 
 # Build shared packages (config, shared, db — order matters via turbo)
 RUN pnpm --filter @paisa/config build && \
@@ -69,8 +73,9 @@ COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
 
-# Install production-only dependencies
-RUN pnpm install --frozen-lockfile --prod
+# Install production-only dependencies (ignore-scripts: prisma generate
+# runs in postinstall but we already copy the generated client from build stage)
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts
 
 # Copy built outputs from build stage
 COPY --from=build /app/apps/api/dist ./apps/api/dist

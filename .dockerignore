@@ -21,7 +21,6 @@ docker/
 e2e/
 **/*.spec.ts
 **/*.test.ts
-**/test/
 coverage/
 docs/
 

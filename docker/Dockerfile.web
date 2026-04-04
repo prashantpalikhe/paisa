@@ -35,7 +35,9 @@ COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
 
-RUN pnpm install --frozen-lockfile
+# --ignore-scripts: prisma generate runs in postinstall but schema isn't
+# copied yet. We run prisma generate explicitly in the build stage.
+RUN pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Stage 3: Build ───────────────────────────────────────────────────────────
 FROM deps AS build
@@ -45,7 +47,9 @@ COPY apps/web/ ./apps/web/
 COPY tsconfig.base.json ./
 
 # Generate Prisma client (shared package depends on it)
-RUN pnpm --filter @paisa/db exec prisma generate
+# Dummy DATABASE_URL — generate only reads the schema, doesn't connect
+RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" \
+    pnpm --filter @paisa/db exec prisma generate
 
 # Build shared packages
 RUN pnpm --filter @paisa/config build && \
