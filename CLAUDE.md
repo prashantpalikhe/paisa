@@ -151,6 +151,7 @@ API docs title, email templates, and frontend theme all read from this config.
 - Token families: Track lineage from a single login. Replay detection revokes entire family.
 - `@UsePipes()` vs `@Body(pipe)`: Use `@Body(new ZodValidationPipe(schema))` on methods that also have `@CurrentUser()`. `@UsePipes()` applies to ALL params including CurrentUser which breaks validation.
 - Email verification/password reset tokens: In-memory Map for now (Phase 8 → Redis).
+- WebAuthn challenge store: In-memory Map with 60s TTL, periodic cleanup, MAX_CHALLENGES=10,000 cap (Phase 8 → Redis).
 - `configureApp()` applies Helmet, cookies, CORS, filters, interceptors. Shared by main.ts and tests.
 - Domain events: Auth emits events (user.registered, user.logged_in, etc.) via EventBus. Email module listens.
 - Google OAuth: Feature-flagged via `FEATURE_AUTH_GOOGLE_ENABLED`. Uses `passport-google-oauth20`.
@@ -174,6 +175,22 @@ API docs title, email templates, and frontend theme all read from this config.
        ```
     5. Restart the API server — "Continue with Google" buttons on login/register are always visible but the backend returns 404 when the flag is off
     6. For production: update `GOOGLE_CALLBACK_URL` to your real API domain, add production origins/redirects in Google Console, and publish the OAuth consent screen
+- Passkeys (WebAuthn): Feature-flagged via `FEATURE_AUTH_PASSKEY_ENABLED` (default: true). Uses `@simplewebauthn/server` v13.
+  - `PasskeyService` handles two WebAuthn ceremonies: registration (adding a passkey) and authentication (logging in).
+  - `PasskeyGuard` checks the feature flag at controller level, returns 404 when disabled (same pattern as `GoogleOAuthGuard`).
+  - `PasskeyController` has 7 endpoints under `/auth/passkey/`: register/options, register/verify, login/options, login/verify, list, rename, delete.
+  - Registration endpoints are authenticated (JWT required). Login endpoints are `@Public()`.
+  - Challenge store: In-memory Map keyed by `reg:{userId}` or `auth:{sessionId}`. Challenges expire after 60s, single-use (consumed on verification).
+  - Authentication uses an opaque random `sessionId` (not the challenge value) to key stored challenges. Frontend sends sessionId back during verification.
+  - Counter tracking: Stored per-passkey, updated after each authentication (clone detection).
+  - Env vars: `WEBAUTHN_RP_NAME` (display name), `WEBAUTHN_RP_ID` (domain, e.g. `localhost`), `WEBAUTHN_ORIGIN` (full origin, e.g. `http://localhost:3000`).
+  - Frontend: `usePasskey()` composable wraps `@simplewebauthn/browser` for registration, authentication, and passkey management.
+- Set password: `POST /auth/set-password` allows OAuth-only users (passwordHash: null) to add a password.
+  - Guards: user must exist, must NOT have existing password (throws 409 ConflictException).
+  - Frontend: `security.vue` shows "Set password" form (v-if="!user?.hasPassword") vs "Change password" form (v-else).
+- Shared auth helpers: `auth.helpers.ts` contains `setRefreshCookie()`, `toAuthUser()`, `parseExpiryToMs()` — shared between `AuthController` and `PasskeyController`. `auth.constants.ts` exports `REFRESH_TOKEN_COOKIE`.
+- `hasPasskey` optimization: NOT queried on every authenticated request (removed from JwtStrategy to avoid per-request DB cost). Only populated by `GET /auth/me`, login responses, and register responses via `toAuthUser()`.
+- `hasPassword` boolean: Derived from `!!user.passwordHash` in JWT strategy and `toAuthUser()`. Drives the frontend set-password vs change-password UI.
 - Email module: Always enabled (core functionality). Three-tier provider setup by `NODE_ENV`:
   - Development (`NODE_ENV=development`): ConsoleEmailProvider — prints emails to terminal
   - Test (`NODE_ENV=test`): InMemoryEmailProvider — captures emails for assertions via `getSentEmails()`
@@ -197,6 +214,7 @@ API docs title, email templates, and frontend theme all read from this config.
   - `auth` middleware: protects routes, waits for auth loading to resolve.
   - `guest` middleware: redirects authenticated users away from login/register.
   - OAuth callback: `/auth/callback` reads token from URL query, stores in memory, clears URL.
+  - `usePasskey()` composable: wraps `@simplewebauthn/browser` for passkey registration, login, list, rename, delete. Exports `PasskeyInfo` type (auto-imported by Nuxt).
 - Zod schemas from `@paisa/shared` used for both client-side validation and API validation.
 - `cn()` utility in `app/lib/utils.ts` for merging Tailwind classes (clsx + tailwind-merge).
 
@@ -239,3 +257,8 @@ API docs title, email templates, and frontend theme all read from this config.
 - **Don't name composables `useAppConfig`**: Nuxt has a built-in `useAppConfig` composable. Shadowing it causes warnings and breaks auto-imports. Our feature flags composable is named `useFeatureFlags` to avoid this.
 - **Feature flags for frontend**: `useFeatureFlags()` composable fetches `GET /config` on app startup via `config.client.ts` plugin. Caches in `useState`. Used to conditionally show/hide Google OAuth buttons and other feature-gated UI.
 - **`PublicConfigController`**: Dedicated `GET /config` endpoint exposes client-safe feature flags (auth providers, Stripe). Lives in `CoreConfigModule`. Never exposes secrets — only booleans.
+- **Passkey feature defaults to enabled**: Unlike Google OAuth (defaults off), passkeys default to enabled. Requires `WEBAUTHN_RP_NAME`, `WEBAUTHN_RP_ID`, `WEBAUTHN_ORIGIN` env vars to be correctly set. Set `FEATURE_AUTH_PASSKEY_ENABLED=false` to disable.
+- **`hasPasskey` is false in JWT strategy**: To avoid a DB query on every authenticated request, `hasPasskey` is hardcoded `false` in `JwtStrategy.validate()`. The real value is populated by `GET /auth/me` and login/register response builders. Don't rely on `@CurrentUser().hasPasskey` in arbitrary endpoints.
+- **WebAuthn challenge store is in-memory**: Same limitation as email tokens. Won't work across multiple server instances. Phase 8 → Redis.
+- **Passkey e2e tests can't test full ceremonies**: WebAuthn requires a browser authenticator. E2e tests cover CRUD, auth requirements, and feature flag gating but not the actual crypto verification flow (tested by @simplewebauthn/server internally).
+- **`@simplewebauthn/server` + `@simplewebauthn/browser`**: Must stay version-aligned. Currently both at v13. The server package validates credential formats strictly (e.g., credentialId must be valid base64url).

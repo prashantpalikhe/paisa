@@ -22,7 +22,7 @@ export class PasskeyGuard implements CanActivate {
   canActivate(_context: ExecutionContext): boolean {
     if (!this.config.features.auth.passkey.enabled) {
       throw new NotFoundException(
-        'Passkey authentication is not enabled. Set FEATURE_AUTH_PASSKEY_ENABLED=true to enable it.',
+        'Passkey authentication is not enabled.',
       );
     }
 

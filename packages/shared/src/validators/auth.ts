@@ -73,6 +73,7 @@ export const passkeyRegistrationSchema = z.object({
   response: z.record(z.unknown()), // RegistrationResponseJSON — validated by @simplewebauthn/server
   deviceName: z
     .string()
+    .trim()
     .max(100, 'Device name must be at most 100 characters')
     .optional(),
 });
@@ -85,6 +86,7 @@ export const passkeyAuthenticationSchema = z.object({
 export const passkeyRenameSchema = z.object({
   deviceName: z
     .string()
+    .trim()
     .min(1, 'Device name is required')
     .max(100, 'Device name must be at most 100 characters'),
 });

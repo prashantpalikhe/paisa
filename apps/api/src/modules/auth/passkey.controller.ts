@@ -97,7 +97,7 @@ export class PasskeyController {
   async verifyRegistration(
     @CurrentUser() user: AuthUser,
     @Body(new ZodValidationPipe(passkeyRegistrationSchema))
-    body: { response: any; deviceName?: string },
+    body: { response: Record<string, unknown>; deviceName?: string },
   ) {
     return this.passkeyService.verifyRegistration(
       user.id,
@@ -208,9 +208,5 @@ export class PasskeyController {
     await this.passkeyService.deletePasskey(user.id, passkeyId);
     return { message: 'Passkey deleted successfully.' };
   }
-
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // PRIVATE HELPERS
-  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 }
