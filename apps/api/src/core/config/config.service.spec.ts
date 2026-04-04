@@ -71,10 +71,25 @@ describe('AppConfigService', () => {
     expect(config.cookieSameSite).toBe('none');
   });
 
-  it('should return lax cookie policy for same-site production', () => {
+  it('should return none cookie policy for different subdomains in production', () => {
     process.env.NODE_ENV = 'production';
     process.env.FRONTEND_URL = 'https://myapp.com';
     process.env.API_BASE_URL = 'https://api.myapp.com';
+    // Email config required in production (no feature flag gate)
+    process.env.RESEND_API_KEY = 're_test';
+    process.env.EMAIL_FROM = 'test@example.com';
+
+    const config = new AppConfigService({
+      get: (key: string) => process.env[key],
+    } as any);
+
+    expect(config.cookieSameSite).toBe('none');
+  });
+
+  it('should return lax cookie policy for same host in production', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.FRONTEND_URL = 'https://myapp.com';
+    process.env.API_BASE_URL = 'https://myapp.com';
     // Email config required in production (no feature flag gate)
     process.env.RESEND_API_KEY = 're_test';
     process.env.EMAIL_FROM = 'test@example.com';

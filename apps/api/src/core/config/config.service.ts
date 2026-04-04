@@ -69,19 +69,18 @@ export class AppConfigService {
   get cookieSameSite(): 'strict' | 'lax' | 'none' {
     if (this.isDevelopment || this.isTest) return 'lax';
 
-    // If frontend and API are on different sites, use 'none'
+    // If frontend and API are on different hosts, use 'none'.
+    // Simple hostname comparison — covers both custom domains
+    // (api.myapp.com vs myapp.com) and platform subdomains
+    // (app-api.up.railway.app vs app-web.up.railway.app).
     const frontendHost = new URL(this.env.FRONTEND_URL).hostname;
     const apiHost = new URL(this.env.API_BASE_URL).hostname;
 
-    // Extract root domain (e.g., "myapp.com" from "api.myapp.com")
-    const frontendRoot = frontendHost.split('.').slice(-2).join('.');
-    const apiRoot = apiHost.split('.').slice(-2).join('.');
-
-    if (frontendRoot !== apiRoot) {
-      return 'none'; // cross-site (preview environments)
+    if (frontendHost !== apiHost) {
+      return 'none'; // cross-origin
     }
 
-    return 'lax'; // same-site (production with shared domain)
+    return 'lax'; // same host
   }
 
   /** CORS allowed origins */
