@@ -12,7 +12,7 @@
     <!-- Logo + App Name -->
     <div class="mb-8 text-center">
       <h1 class="text-3xl font-bold tracking-tight text-foreground">
-        Paisa
+        {{ brand.name }}
       </h1>
     </div>
 
@@ -33,6 +33,10 @@
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+const brand = useBrand()
+</script>
 
 <style scoped>
 .auth-gradient {

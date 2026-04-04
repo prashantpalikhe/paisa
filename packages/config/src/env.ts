@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { brand } from './brand';
 
 /**
  * # Environment Variable Validation
@@ -36,7 +37,7 @@ export const envSchema = z.object({
   JWT_REFRESH_EXPIRY: z.string().default('7d'),
 
   // ─── WebAuthn ───
-  WEBAUTHN_RP_NAME: z.string().default('Paisa'),
+  WEBAUTHN_RP_NAME: z.string().default(brand.name),
   WEBAUTHN_RP_ID: z.string().default('localhost'),
   WEBAUTHN_ORIGIN: z.string().url().default('http://localhost:3000'),
 

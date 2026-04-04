@@ -56,10 +56,10 @@ async function main() {
   // Password: "Admin123!" — change immediately in production
   // This hash is for development/testing only
   const adminUser = await prisma.user.upsert({
-    where: { email: 'admin@paisa.dev' },
+    where: { email: 'admin@example.com' },
     update: {},
     create: {
-      email: 'admin@paisa.dev',
+      email: 'admin@example.com',
       name: 'Admin',
       role: 'ADMIN',
       emailVerified: true,

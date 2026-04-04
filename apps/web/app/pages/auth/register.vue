@@ -12,7 +12,7 @@
     <CardHeader class="pb-4 text-center">
       <CardTitle class="text-xl">Create your account</CardTitle>
       <CardDescription>
-        Get started with Paisa today
+        Get started with {{ brand.name }} today
       </CardDescription>
     </CardHeader>
     <CardContent class="space-y-4">
@@ -113,6 +113,7 @@ definePageMeta({
 useHead({ title: 'Create Account' })
 
 const { register } = useAuth()
+const brand = useBrand()
 const config = useRuntimeConfig()
 const { appConfig } = useFeatureFlags()
 

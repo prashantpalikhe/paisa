@@ -90,8 +90,8 @@
         </CardHeader>
         <CardContent>
           <p class="text-sm text-muted-foreground">
-            This is the Paisa boilerplate dashboard. Replace these cards
-            with your app's real content — stats, activity feeds, quick actions.
+            This is your dashboard. Replace these cards with your app's
+            real content — stats, activity feeds, quick actions.
           </p>
         </CardContent>
       </Card>

@@ -111,7 +111,7 @@
     </CardContent>
     <CardFooter class="justify-center border-t bg-muted/30 py-4">
       <p class="text-sm text-muted-foreground">
-        New to Paisa?
+        New to {{ brand.name }}?
         <NuxtLink to="/auth/register" class="font-medium text-primary hover:underline">
           Create an account
         </NuxtLink>
@@ -132,6 +132,7 @@ definePageMeta({
 useHead({ title: 'Sign In' })
 
 const { login } = useAuth()
+const brand = useBrand()
 const config = useRuntimeConfig()
 const { appConfig } = useFeatureFlags()
 

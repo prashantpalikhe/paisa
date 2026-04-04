@@ -10,7 +10,7 @@
     <!-- Navigation -->
     <header class="border-b border-border">
       <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        <span class="text-xl font-bold text-foreground">Paisa</span>
+        <span class="text-xl font-bold text-foreground">{{ brand.name }}</span>
         <div class="flex items-center gap-3">
           <Button variant="ghost" as-child>
             <NuxtLink to="/auth/login">Sign in</NuxtLink>
@@ -25,11 +25,10 @@
     <!-- Hero -->
     <main class="flex flex-1 flex-col items-center justify-center px-4 text-center">
       <h1 class="max-w-2xl text-4xl font-bold tracking-tight text-foreground sm:text-6xl">
-        Ship faster, build better
+        {{ brand.tagline }}
       </h1>
       <p class="mt-6 max-w-xl text-lg text-muted-foreground">
-        A production-ready SaaS boilerplate with authentication, billing,
-        email, and everything you need to launch your next product.
+        {{ brand.description }}
       </p>
       <div class="mt-10 flex flex-col items-center gap-4 sm:flex-row">
         <Button size="lg" as-child>
@@ -43,7 +42,7 @@
 
     <!-- Footer -->
     <footer class="border-t border-border py-8 text-center text-sm text-muted-foreground">
-      <p>&copy; {{ new Date().getFullYear() }} Paisa. All rights reserved.</p>
+      <p>&copy; {{ new Date().getFullYear() }} {{ brand.company }}. All rights reserved.</p>
     </footer>
   </div>
 </template>
@@ -53,7 +52,9 @@ definePageMeta({
   layout: false, // Full-page layout, no wrapper
 })
 
+const brand = useBrand()
+
 useHead({
-  title: 'Paisa — Ship faster, build better',
+  title: `${brand.name} — ${brand.tagline}`,
 })
 </script>

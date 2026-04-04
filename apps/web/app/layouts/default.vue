@@ -15,7 +15,7 @@
       <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <!-- Left: Logo -->
         <NuxtLink to="/dashboard" class="flex items-center gap-2">
-          <span class="text-xl font-bold text-foreground">Paisa</span>
+          <span class="text-xl font-bold text-foreground">{{ brand.name }}</span>
         </NuxtLink>
 
         <!-- Right: User dropdown or skeleton while loading -->
@@ -89,6 +89,7 @@
 import { ChevronDown, LayoutDashboard, LogOut, Settings } from 'lucide-vue-next'
 
 const runtimeConfig = useRuntimeConfig()
+const brand = useBrand()
 const { user, isLoading, logout } = useAuth()
 
 const userInitials = computed(() => {
