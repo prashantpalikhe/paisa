@@ -247,5 +247,8 @@ export function useAuth() {
     getAccessToken,
     setTokens,
     clearAuth,
+
+    // API helper — for making authenticated requests from settings pages, etc.
+    apiFetch,
   }
 }

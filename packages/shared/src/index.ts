@@ -21,6 +21,8 @@ export type {
   VerifyEmailRequest,
   TwoFactorVerifyRequest,
   ChangePasswordRequest,
+  UpdateProfileRequest,
+  DeleteAccountRequest,
   OAuthProvider,
   OAuthProfile,
 } from './types/auth';
@@ -64,6 +66,8 @@ export {
   resetPasswordSchema,
   verifyEmailSchema,
   changePasswordSchema,
+  updateProfileSchema,
+  deleteAccountSchema,
   twoFactorVerifySchema,
 } from './validators/auth';
 

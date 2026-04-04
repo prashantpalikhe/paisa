@@ -150,6 +150,42 @@ export class UserService {
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Profile management
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /**
+   * Update a user's profile fields (name for now, avatar later).
+   * Returns the updated user.
+   */
+  async updateProfile(
+    userId: string,
+    data: { name: string },
+  ): Promise<User> {
+    const user = await this.db.user.update({
+      where: { id: userId },
+      data: { name: data.name.trim() },
+    });
+
+    this.logger.log(`Profile updated for user: ${userId}`);
+    return user;
+  }
+
+  /**
+   * Delete a user and all related data.
+   *
+   * All relations (OAuthAccount, RefreshToken, Subscription, etc.)
+   * have `onDelete: Cascade` in the Prisma schema, so a single
+   * `user.delete()` removes everything atomically.
+   */
+  async deleteUser(userId: string): Promise<void> {
+    await this.db.user.delete({
+      where: { id: userId },
+    });
+
+    this.logger.log(`User deleted: ${userId}`);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // OAuth
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

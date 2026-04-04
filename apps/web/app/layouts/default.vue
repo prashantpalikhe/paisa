@@ -52,6 +52,12 @@
                   Dashboard
                 </NuxtLink>
               </DropdownMenuItem>
+              <DropdownMenuItem as-child>
+                <NuxtLink to="/settings/profile" class="flex items-center gap-2">
+                  <Settings class="h-4 w-4" />
+                  Settings
+                </NuxtLink>
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem class="gap-2" @click="logout">
                 <LogOut class="h-4 w-4" />
@@ -71,7 +77,7 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, LayoutDashboard, LogOut, User } from 'lucide-vue-next'
+import { ChevronDown, LayoutDashboard, LogOut, Settings, User } from 'lucide-vue-next'
 
 const { user, isLoading, logout } = useAuth()
 </script>

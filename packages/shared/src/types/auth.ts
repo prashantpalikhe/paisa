@@ -62,6 +62,16 @@ export interface ChangePasswordRequest {
   newPassword: string;
 }
 
+// ─── Profile ───
+
+export interface UpdateProfileRequest {
+  name: string;
+}
+
+export interface DeleteAccountRequest {
+  password: string;
+}
+
 // ─── OAuth ───
 
 /** Supported OAuth providers. Extend this as new providers are added. */

@@ -51,6 +51,18 @@ export const changePasswordSchema = z.object({
   newPassword: passwordSchema,
 });
 
+export const updateProfileSchema = z.object({
+  name: z
+    .string()
+    .min(1, 'Name is required')
+    .max(100, 'Name must be at most 100 characters')
+    .trim(),
+});
+
+export const deleteAccountSchema = z.object({
+  password: z.string().min(1, 'Password is required'),
+});
+
 export const twoFactorVerifySchema = z.object({
   code: z
     .string()
