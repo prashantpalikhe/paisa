@@ -3,9 +3,8 @@
 #
 # Stages:
 #   1. base      — Node 22 + pnpm via corepack
-#   2. deps      — Install ALL dependencies (dev + prod)
-#   3. build     — Build packages + API
-#   4. production — Slim image with only production deps + compiled output
+#   2. deps      — Install ALL dependencies
+#   3. build     — Build packages + API (final production image)
 #
 # Build:
 #   docker build -f docker/Dockerfile.api -t paisa-api .
@@ -17,7 +16,7 @@
 # ── Stage 1: Base ────────────────────────────────────────────────────────────
 FROM node:22-slim AS base
 
-# Enable corepack for pnpm
+RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 RUN corepack enable && corepack prepare pnpm@10.33.0 --activate
 
 WORKDIR /app
@@ -33,10 +32,11 @@ COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
 
-# Install all dependencies (including dev — needed for build step)
-# --ignore-scripts: prisma generate runs in postinstall but schema isn't
+# Use hoisted node_modules layout so symlinks aren't broken by Docker COPY.
+# --ignore-scripts: prisma postinstall needs schema files which aren't
 # copied yet. We run prisma generate explicitly in the build stage.
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN echo "node-linker=hoisted" > .npmrc && \
+    pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Stage 3: Build ───────────────────────────────────────────────────────────
 FROM deps AS build
@@ -46,53 +46,24 @@ COPY packages/ ./packages/
 COPY apps/api/ ./apps/api/
 COPY tsconfig.base.json ./
 
-# Generate Prisma client (needs schema + prisma.config.ts)
-# Dummy DATABASE_URL — generate only reads the schema, doesn't connect
+# Generate Prisma client (dummy URL — generate only reads the schema)
 RUN DATABASE_URL="postgresql://dummy:dummy@localhost:5432/dummy" \
     pnpm --filter @paisa/db exec prisma generate
 
-# Build shared packages (config, shared, db — order matters via turbo)
+# Build shared packages then API
 RUN pnpm --filter @paisa/config build && \
     pnpm --filter @paisa/shared build && \
     pnpm --filter @paisa/db build
 
-# Build the API
 RUN pnpm --filter @paisa/api build
-
-# ── Stage 4: Production ─────────────────────────────────────────────────────
-FROM base AS production
-
-ENV NODE_ENV=production
-
-WORKDIR /app
-
-# Copy workspace config for pnpm
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY apps/api/package.json ./apps/api/
-COPY packages/config/package.json ./packages/config/
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/db/package.json ./packages/db/
-
-# Install production-only dependencies (ignore-scripts: prisma generate
-# runs in postinstall but we already copy the generated client from build stage)
-RUN pnpm install --frozen-lockfile --prod --ignore-scripts
-
-# Copy built outputs from build stage
-COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/packages/config/dist ./packages/config/dist
-COPY --from=build /app/packages/shared/dist ./packages/shared/dist
-COPY --from=build /app/packages/db/dist ./packages/db/dist
-
-# Copy Prisma files (migrations + generated client)
-COPY --from=build /app/packages/db/prisma ./packages/db/prisma
-COPY --from=build /app/packages/db/src/generated ./packages/db/src/generated
-COPY --from=build /app/packages/db/prisma.config.ts ./packages/db/prisma.config.ts
 
 # Create uploads directory for local storage provider
 RUN mkdir -p /app/uploads
+
+ENV NODE_ENV=production
 
 EXPOSE 3001
 
 # Run migrations then start the API
 # Migrations run on every deploy — Prisma migrate deploy is idempotent
-CMD ["sh", "-c", "cd packages/db && npx prisma migrate deploy && cd /app && node apps/api/dist/main.js"]
+CMD ["sh", "-c", "cd packages/db && pnpm exec prisma migrate deploy && cd /app && node apps/api/dist/main.js"]

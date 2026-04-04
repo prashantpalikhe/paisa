@@ -35,9 +35,11 @@ COPY packages/config/package.json ./packages/config/
 COPY packages/shared/package.json ./packages/shared/
 COPY packages/db/package.json ./packages/db/
 
-# --ignore-scripts: prisma generate runs in postinstall but schema isn't
+# Use hoisted node_modules layout so symlinks aren't broken by Docker COPY.
+# --ignore-scripts: prisma postinstall needs schema files which aren't
 # copied yet. We run prisma generate explicitly in the build stage.
-RUN pnpm install --frozen-lockfile --ignore-scripts
+RUN echo "node-linker=hoisted" > .npmrc && \
+    pnpm install --frozen-lockfile --ignore-scripts
 
 # ── Stage 3: Build ───────────────────────────────────────────────────────────
 FROM deps AS build
