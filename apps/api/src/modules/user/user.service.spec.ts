@@ -13,6 +13,8 @@
  * - verifyPassword(): correct password, wrong password, no password (OAuth user)
  * - updatePassword(): hashes before storing
  * - markEmailVerified(): sets flag and timestamp
+ * - updateAvatarUrl(): set/clear avatar URL
+ * - deleteAvatar(): delete from storage, skip external URLs
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { UserService } from './user.service';
@@ -179,6 +181,64 @@ describe('UserService', () => {
     const updateCall = mockDb.user.update.mock.calls[0][0];
     expect(updateCall.data.emailVerified).toBe(true);
     expect(updateCall.data.emailVerifiedAt).toBeInstanceOf(Date);
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Avatar
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  it('should update avatar URL', async () => {
+    const fakeUser = { id: 'user-1', avatarUrl: '/uploads/avatars/new.jpg' };
+    mockDb.user.update.mockResolvedValue(fakeUser);
+
+    const result = await service.updateAvatarUrl('user-1', '/uploads/avatars/new.jpg');
+
+    expect(result.avatarUrl).toBe('/uploads/avatars/new.jpg');
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { avatarUrl: '/uploads/avatars/new.jpg' },
+    });
+  });
+
+  it('should clear avatar URL when null is passed', async () => {
+    const fakeUser = { id: 'user-1', avatarUrl: null };
+    mockDb.user.update.mockResolvedValue(fakeUser);
+
+    const result = await service.updateAvatarUrl('user-1', null);
+
+    expect(result.avatarUrl).toBeNull();
+    expect(mockDb.user.update).toHaveBeenCalledWith({
+      where: { id: 'user-1' },
+      data: { avatarUrl: null },
+    });
+  });
+
+  it('should delete avatar from storage', async () => {
+    const user = { avatarUrl: '/uploads/avatars/uuid.jpg' } as any;
+    const mockStorage = { delete: vi.fn().mockResolvedValue(undefined) } as any;
+
+    await service.deleteAvatar(user, mockStorage);
+
+    expect(mockStorage.delete).toHaveBeenCalledWith('avatars/uuid.jpg');
+  });
+
+  it('should skip deletion for external avatar URLs', async () => {
+    const user = { avatarUrl: 'https://lh3.googleusercontent.com/photo.jpg' } as any;
+    const mockStorage = { delete: vi.fn() } as any;
+
+    await service.deleteAvatar(user, mockStorage);
+
+    // Should NOT call storage.delete for external URLs
+    expect(mockStorage.delete).not.toHaveBeenCalled();
+  });
+
+  it('should skip deletion when no avatar URL', async () => {
+    const user = { avatarUrl: null } as any;
+    const mockStorage = { delete: vi.fn() } as any;
+
+    await service.deleteAvatar(user, mockStorage);
+
+    expect(mockStorage.delete).not.toHaveBeenCalled();
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

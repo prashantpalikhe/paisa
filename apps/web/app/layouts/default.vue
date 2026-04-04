@@ -36,7 +36,16 @@
           <DropdownMenu v-else-if="user">
             <DropdownMenuTrigger as-child>
               <Button variant="ghost" class="gap-2">
-                <User class="h-4 w-4" />
+                <Avatar class="h-6 w-6">
+                  <AvatarImage
+                    v-if="user.avatarUrl"
+                    :src="resolveAvatarUrl(user.avatarUrl)"
+                    :alt="user.name || ''"
+                  />
+                  <AvatarFallback class="text-xs">
+                    {{ userInitials }}
+                  </AvatarFallback>
+                </Avatar>
                 <span>{{ user.name || user.email }}</span>
                 <ChevronDown class="h-4 w-4 opacity-50" />
               </Button>
@@ -77,7 +86,25 @@
 </template>
 
 <script setup lang="ts">
-import { ChevronDown, LayoutDashboard, LogOut, Settings, User } from 'lucide-vue-next'
+import { ChevronDown, LayoutDashboard, LogOut, Settings } from 'lucide-vue-next'
 
+const runtimeConfig = useRuntimeConfig()
 const { user, isLoading, logout } = useAuth()
+
+const userInitials = computed(() => {
+  const name = user.value?.name || user.value?.email || ''
+  return name
+    .split(/[\s@]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(s => s[0]!.toUpperCase())
+    .join('')
+})
+
+function resolveAvatarUrl(url?: string | null): string {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  const apiBase = runtimeConfig.public.apiBaseUrl || 'http://localhost:3001'
+  return `${apiBase}${url}`
+}
 </script>

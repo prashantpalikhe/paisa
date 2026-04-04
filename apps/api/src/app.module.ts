@@ -8,6 +8,7 @@ import { EventBusModule } from './common/event-bus/event-bus.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { UserModule } from './modules/user/user.module';
 import { EmailModule } from './modules/email/email.module';
+import { StorageModule } from './modules/storage/storage.module';
 import { TestModule } from './test/test.module';
 
 /**
@@ -41,10 +42,10 @@ const features = parseFeatures(process.env);
 
 const optionalModules = [
   features.email.enabled && EmailModule.register(),
+  features.storage.enabled && StorageModule.register(),
   // features.stripe.enabled    && StripeModule.register(),
   // features.redis.enabled     && CacheModule.register(),
   // features.rabbitmq.enabled  && QueueModule.register(),
-  // features.storage.enabled   && StorageModule.register(),
   // features.websockets.enabled && WebsocketModule.register(),
   // features.sentry.enabled    && SentryModule.register(),
 ].filter(Boolean);

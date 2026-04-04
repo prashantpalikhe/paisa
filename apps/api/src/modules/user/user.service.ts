@@ -40,6 +40,7 @@ import * as argon2 from 'argon2';
 import { DatabaseService } from '../../core/database/database.service';
 import type { User } from '@paisa/db';
 import type { OAuthProfile } from '@paisa/shared';
+import type { StorageProvider } from '../storage/providers/storage-provider.interface';
 
 /** Fields needed to create a new user */
 export interface CreateUserInput {
@@ -183,6 +184,58 @@ export class UserService {
     });
 
     this.logger.log(`User deleted: ${userId}`);
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Avatar
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /**
+   * Update the user's avatar URL in the database.
+   * Pass null to clear the avatar.
+   */
+  async updateAvatarUrl(
+    userId: string,
+    avatarUrl: string | null,
+  ): Promise<User> {
+    const user = await this.db.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+    });
+
+    this.logger.log(`Avatar ${avatarUrl ? 'updated' : 'removed'} for user: ${userId}`);
+    return user;
+  }
+
+  /**
+   * Delete a user's avatar from storage.
+   *
+   * The tricky part: we need to extract the storage "key" from the URL.
+   * - Local URLs look like: /uploads/avatars/uuid.jpg → key: "avatars/uuid.jpg"
+   * - R2 URLs look like: https://cdn.app.com/avatars/uuid.jpg → key: "avatars/uuid.jpg"
+   *
+   * We extract the key by finding "avatars/" in the URL and taking everything after.
+   * If it's an external URL (e.g. Google OAuth avatar), we skip deletion.
+   */
+  async deleteAvatar(
+    user: User,
+    storage: StorageProvider,
+  ): Promise<void> {
+    if (!user.avatarUrl) return;
+
+    // Extract storage key from the URL
+    // For local: "/uploads/avatars/uuid.jpg" → "avatars/uuid.jpg"
+    // For R2: "https://cdn.app.com/avatars/uuid.jpg" → "avatars/uuid.jpg"
+    const avatarsIndex = user.avatarUrl.indexOf('avatars/');
+    if (avatarsIndex === -1) {
+      // External URL (e.g. Google avatar) — nothing to delete from our storage
+      this.logger.debug(`Skipping avatar delete — external URL: ${user.avatarUrl}`);
+      return;
+    }
+
+    const key = user.avatarUrl.substring(avatarsIndex);
+    await storage.delete(key);
+    this.logger.log(`Avatar deleted from storage: ${key}`);
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

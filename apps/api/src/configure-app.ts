@@ -21,8 +21,10 @@
  * - Listening on a port — tests use supertest, not a real HTTP server
  */
 import { INestApplication } from '@nestjs/common';
+import { join } from 'path';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import * as express from 'express';
 import { AppConfigService } from './core/config/config.service';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 import { ResponseTransformInterceptor } from './common/interceptors/response-transform.interceptor';
@@ -59,6 +61,15 @@ export function configureApp(app: INestApplication): void {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token'],
   });
+
+  // ─── Static files (local uploads in development) ───
+  // In development, LocalStorageProvider saves files to `uploads/`.
+  // This middleware serves them at `/uploads/*` so avatar URLs work.
+  // In production, files are on Cloudflare R2 with a CDN URL — this is unused.
+  if (config.isDevelopment || config.isTest) {
+    const uploadsPath = join(process.cwd(), 'uploads');
+    app.use('/uploads', express.static(uploadsPath));
+  }
 
   // ─── Global filters & interceptors ───
   app.useGlobalFilters(new GlobalExceptionFilter());

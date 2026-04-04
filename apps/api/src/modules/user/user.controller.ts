@@ -6,11 +6,12 @@
  *
  * ## Endpoints
  *
- * | Method | Path          | Purpose                          |
- * |--------|---------------|----------------------------------|
- * | GET    | /users/me     | Get current user profile         |
- * | PATCH  | /users/me     | Update profile (name)            |
- * | DELETE | /users/me     | Delete account (requires password)|
+ * | Method | Path               | Purpose                          |
+ * |--------|--------------------|----------------------------------|
+ * | PATCH  | /users/me          | Update profile (name)            |
+ * | POST   | /users/me/avatar   | Upload avatar image              |
+ * | DELETE | /users/me/avatar   | Remove avatar image              |
+ * | DELETE | /users/me          | Delete account (requires password)|
  *
  * ## Why not PUT?
  *
@@ -22,20 +23,38 @@
  * Lives at POST /auth/change-password (AuthController), not here.
  * This avoids circular module dependencies — AuthService handles
  * all password-related operations.
+ *
+ * ## Avatar upload
+ *
+ * Uses multipart/form-data (not JSON). The file is validated for:
+ * - Size: max 2 MB
+ * - Type: image/jpeg, image/png, image/webp, image/gif only
+ *
+ * Storage is handled by the StorageModule (local in dev, R2 in production).
+ * If storage is disabled (FEATURE_STORAGE_ENABLED=false), avatar endpoints
+ * return 404 — they're feature-flagged at the controller level.
  */
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   ForbiddenException,
   HttpCode,
   HttpStatus,
+  Inject,
   NotFoundException,
+  Optional,
   Patch,
+  Post,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
+  ApiConsumes,
   ApiOperation,
   ApiResponse,
   ApiTags,
@@ -50,9 +69,24 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { ZodValidationPipe } from '../../common/pipes/zod-validation.pipe';
 import { AppConfigService } from '../../core/config/config.service';
 import { UserService } from './user.service';
+import {
+  STORAGE_PROVIDER,
+  type StorageProvider,
+} from '../storage/providers/storage-provider.interface';
 
 /** Cookie name — must match AuthController */
 const REFRESH_TOKEN_COOKIE = 'refresh_token';
+
+/** Max avatar file size: 2 MB */
+const MAX_AVATAR_SIZE = 2 * 1024 * 1024;
+
+/** Allowed MIME types for avatars */
+const ALLOWED_AVATAR_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+];
 
 @ApiTags('Users')
 @Controller('users')
@@ -60,6 +94,14 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly config: AppConfigService,
+    /**
+     * Storage provider is optional because FEATURE_STORAGE_ENABLED might be false.
+     * When storage is disabled, the module isn't loaded and this will be undefined.
+     * We use @Optional() so NestJS doesn't throw "can't resolve STORAGE_PROVIDER".
+     */
+    @Optional()
+    @Inject(STORAGE_PROVIDER)
+    private readonly storage: StorageProvider | undefined,
   ) {}
 
   /**
@@ -93,6 +135,141 @@ export class UserController {
       hasPasskey: false, // TODO: populate when passkeys are implemented
     };
   }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Avatar
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  /**
+   * Upload a new avatar image.
+   *
+   * How multipart file uploads work in NestJS:
+   *
+   * 1. `@UseInterceptors(FileInterceptor('file'))` tells NestJS to parse
+   *    the incoming multipart/form-data request and extract the file
+   *    from the field named "file". Under the hood, this uses Multer.
+   *
+   * 2. `@UploadedFile()` injects the parsed file object, which contains:
+   *    - `buffer`: The raw file bytes (stored in memory, not on disk)
+   *    - `originalname`: The filename the user's browser sent
+   *    - `mimetype`: The MIME type (e.g. "image/jpeg")
+   *    - `size`: File size in bytes
+   *
+   * 3. We validate the file manually (size + type), then pass it to
+   *    the storage provider which handles the actual upload.
+   */
+  @Post('me/avatar')
+  @HttpCode(HttpStatus.OK)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiBearerAuth()
+  @ApiConsumes('multipart/form-data')
+  @ApiOperation({ summary: 'Upload avatar' })
+  @ApiResponse({ status: 200, description: 'Avatar uploaded' })
+  @ApiResponse({ status: 400, description: 'Invalid file' })
+  @ApiResponse({ status: 404, description: 'Storage not enabled' })
+  async uploadAvatar(
+    @CurrentUser() currentUser: AuthUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    // Guard: storage must be enabled
+    if (!this.storage) {
+      throw new NotFoundException('File storage is not enabled');
+    }
+
+    // Guard: file must be present
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Validate file size
+    if (file.size > MAX_AVATAR_SIZE) {
+      throw new BadRequestException(
+        `File too large. Maximum size is ${MAX_AVATAR_SIZE / 1024 / 1024} MB`,
+      );
+    }
+
+    // Validate file type
+    if (!ALLOWED_AVATAR_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException(
+        `Invalid file type. Allowed types: ${ALLOWED_AVATAR_TYPES.join(', ')}`,
+      );
+    }
+
+    // Delete the old avatar if one exists (don't leave orphaned files)
+    const existingUser = await this.userService.findById(currentUser.id);
+    if (existingUser?.avatarUrl) {
+      await this.userService.deleteAvatar(existingUser, this.storage);
+    }
+
+    // Upload the new avatar
+    const result = await this.storage.upload({
+      buffer: file.buffer,
+      filename: file.originalname,
+      mimeType: file.mimetype,
+      folder: 'avatars',
+    });
+
+    // Save the URL to the database
+    const user = await this.userService.updateAvatarUrl(
+      currentUser.id,
+      result.url,
+    );
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      emailVerified: user.emailVerified,
+      avatarUrl: user.avatarUrl,
+      has2FA: false,
+      hasPasskey: false,
+    };
+  }
+
+  /**
+   * Remove the current user's avatar.
+   * Deletes the file from storage and clears the database URL.
+   */
+  @Delete('me/avatar')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Remove avatar' })
+  @ApiResponse({ status: 200, description: 'Avatar removed' })
+  @ApiResponse({ status: 404, description: 'Storage not enabled' })
+  async removeAvatar(@CurrentUser() currentUser: AuthUser) {
+    if (!this.storage) {
+      throw new NotFoundException('File storage is not enabled');
+    }
+
+    const existingUser = await this.userService.findById(currentUser.id);
+    if (!existingUser) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Delete from storage if there's an avatar
+    if (existingUser.avatarUrl) {
+      await this.userService.deleteAvatar(existingUser, this.storage);
+    }
+
+    // Clear the URL in the database
+    const user = await this.userService.updateAvatarUrl(currentUser.id, null);
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      emailVerified: user.emailVerified,
+      avatarUrl: user.avatarUrl,
+      has2FA: false,
+      hasPasskey: false,
+    };
+  }
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Account deletion
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /**
    * Delete the current user's account.
